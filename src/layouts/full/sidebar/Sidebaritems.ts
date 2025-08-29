@@ -25,6 +25,60 @@ import { uniqueId } from 'lodash';
 
 const SidebarContent: MenuItem[] = [
   {
+    heading: 'Menu',
+    children: [
+      {
+        name: 'Programar salida',
+        icon: 'solar:calendar-mark-line-duotone',
+        id: uniqueId(),
+        url: '/menu/programar-salida',
+        isPro: false,
+      },
+      {
+        name: 'Conductores',
+        icon: 'solar:shield-user-outline',
+        id: uniqueId(),
+        url: '/menu/conductores',
+        isPro: false,
+      },
+      {
+        name: 'Vehiculos',
+        icon: 'mdi:car',
+        id: uniqueId(),
+        url: '/menu/vehiculos',
+        isPro: false,
+      },
+      {
+        name: 'Dispositivos',
+        icon: 'mdi:chip',
+        id: uniqueId(),
+        url: '/menu/dispositivos',
+        isPro: false,
+      },
+      {
+        name: 'Panel de Monitoreo',
+        icon: 'solar:chart-line-duotone',
+        id: uniqueId(),
+        url: '/menu/panel-monitoreo',
+        isPro: false,
+      },
+      {
+        name: 'Reportes',
+        icon: 'solar:document-text-outline',
+        id: uniqueId(),
+        url: '/menu/reportes',
+        isPro: false,
+      },
+      {
+        name: 'Salir',
+        icon: 'mdi:logout',
+        id: uniqueId(),
+        url: '/auth/login',
+        isPro: false,
+      },
+    ],
+  },
+  {
     heading: 'Home',
     children: [
       {

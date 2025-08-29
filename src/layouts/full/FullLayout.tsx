@@ -3,13 +3,13 @@ import { Outlet } from 'react-router';
 
 import Sidebar from './sidebar/Sidebar';
 import Header from './header/Header';
-import Topbar from './header/Topbar';
+// Topbar removed per request
 
 const FullLayout: FC = () => {
   return (
     <>
       
-        <Topbar />
+        {/* Topbar removed */}
         <div className="flex w-full ">
           <div className="page-wrapper flex w-full">
             {/* Header/sidebar */}

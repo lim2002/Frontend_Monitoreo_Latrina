@@ -24,6 +24,20 @@ const Buttons = Loadable(lazy(() => import("../views/buttons/Buttons")));
 // icons
 const Solar = Loadable(lazy(() => import("../views/icons/Solar")));
 
+// Vehículos
+const Vehiculos = Loadable(lazy(() => import("../views/vehiculos/Vehiculos")));
+const VehiculoForm = Loadable(lazy(() => import("../views/vehiculos/VehiculoForm")));
+// Dispositivos
+const Dispositivos = Loadable(lazy(() => import("../views/dispositivos/Dispositivos")));
+// Conductores
+const Conductores = Loadable(lazy(() => import("../views/conductores/Conductores")));
+// Programar Salida
+const ProgramarSalida = Loadable(lazy(() => import("../views/programar-salida/ProgramarSalida")));
+// Panel de Monitoreo
+const PanelMonitoreo = Loadable(lazy(() => import("../views/monitoreo/PanelMonitoreo")));
+const SalidaDetalle = Loadable(lazy(() => import("../views/monitoreo/SalidaDetalle")));
+const NotaSalidaDetalle = Loadable(lazy(() => import("../views/monitoreo/NotaSalidaDetalle")));
+
 // authentication
 const Login = Loadable(lazy(() => import('../views/auth/login/Login')));
 const Register = Loadable(lazy(() => import('../views/auth/register/Register')));
@@ -42,6 +56,14 @@ const Router = [
       { path: '/ui/alert', exact: true, element: <Alert/> },
       { path: '/ui/buttons', exact: true, element: <Buttons/> },
       { path: '/icons/solar', exact: true, element: <Solar /> },
+      { path: '/menu/vehiculos', exact: true, element: <Vehiculos /> },
+      { path: '/menu/vehiculos/nuevo', exact: true, element: <VehiculoForm /> },
+      { path: '/menu/dispositivos', exact: true, element: <Dispositivos /> },
+      { path: '/menu/conductores', exact: true, element: <Conductores /> },
+      { path: '/menu/programar-salida', exact: true, element: <ProgramarSalida /> },
+      { path: '/menu/panel-monitoreo', exact: true, element: <PanelMonitoreo /> },
+      { path: '/menu/panel-monitoreo/salidas/:id', exact: true, element: <SalidaDetalle /> },
+      { path: '/menu/panel-monitoreo/salidas/:id/detalle/:notaId', exact: true, element: <NotaSalidaDetalle /> },
       { path: '/sample-page', exact: true, element: <SamplePage /> },
       { path: '*', element: <Navigate to="/auth/404" /> },
     ],

@@ -1,6 +1,6 @@
 
 
-import Logo from "/src/assets/images/logos/dark-logo.svg";
+import Logo from "/src/assets/images/logos/logo_proyecto.png";
 import { Link } from "react-router";
 const FullLogo = () => {
   return (

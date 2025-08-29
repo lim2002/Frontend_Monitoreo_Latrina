@@ -5,7 +5,6 @@ import NavItems from "./NavItems";
 import SimpleBar from "simplebar-react";
 import React from "react";
 import FullLogo from "../shared/logo/FullLogo";
-import Upgrade from "./Upgrade";
 import NavCollapse from "./NavCollapse";
 
 const SidebarLayout = () => {
@@ -49,7 +48,7 @@ const SidebarLayout = () => {
               </SidebarItemGroup>
             </SidebarItems>
           </SimpleBar>
-          <Upgrade/>
+          {/* Upgrade component removed per request */}
         </Sidebar>
       </div>
     </>
