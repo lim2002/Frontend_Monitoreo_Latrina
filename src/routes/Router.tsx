@@ -31,6 +31,9 @@ const VehiculoForm = Loadable(lazy(() => import("../views/vehiculos/VehiculoForm
 const Dispositivos = Loadable(lazy(() => import("../views/dispositivos/Dispositivos")));
 // Conductores
 const Conductores = Loadable(lazy(() => import("../views/conductores/Conductores")));
+const Entregas = Loadable(lazy(() => import("../views/conductores/Entregas")));
+const EntregaDetalle = Loadable(lazy(() => import("../views/conductores/EntregaDetalle")));
+const EntregaObservacion = Loadable(lazy(() => import("../views/conductores/EntregaObservacion")));
 // Programar Salida
 const ProgramarSalida = Loadable(lazy(() => import("../views/programar-salida/ProgramarSalida")));
 // Panel de Monitoreo
@@ -60,6 +63,9 @@ const Router = [
       { path: '/menu/vehiculos/nuevo', exact: true, element: <VehiculoForm /> },
       { path: '/menu/dispositivos', exact: true, element: <Dispositivos /> },
       { path: '/menu/conductores', exact: true, element: <Conductores /> },
+      { path: '/menu/entregas', exact: true, element: <Entregas /> },
+      { path: '/menu/entregas/:id', exact: true, element: <EntregaDetalle /> },
+      { path: '/menu/entregas/:id/observacion/:productoId', exact: true, element: <EntregaObservacion /> },
       { path: '/menu/programar-salida', exact: true, element: <ProgramarSalida /> },
       { path: '/menu/panel-monitoreo', exact: true, element: <PanelMonitoreo /> },
       { path: '/menu/panel-monitoreo/salidas/:id', exact: true, element: <SalidaDetalle /> },

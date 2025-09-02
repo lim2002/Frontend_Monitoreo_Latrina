@@ -25,7 +25,7 @@ import { uniqueId } from 'lodash';
 
 const SidebarContent: MenuItem[] = [
   {
-    heading: 'Menu',
+    heading: 'Menu Administrador',
     children: [
       {
         name: 'Programar salida',
@@ -78,6 +78,27 @@ const SidebarContent: MenuItem[] = [
       },
     ],
   },
+  //Menu del conductor
+  {
+    heading: 'Menu Conductor',
+    children: [
+      {
+        name: 'Entregas',
+        icon: 'solar:calendar-mark-line-duotone',
+        id: uniqueId(),
+        url: '/menu/entregas',
+        isPro: false,
+      },
+      {
+        name: 'Salir',
+        icon: 'mdi:logout',
+        id: uniqueId(),
+        url: '/auth/login',
+        isPro: false,
+      }
+    ],
+  },
+  
   {
     heading: 'Home',
     children: [
