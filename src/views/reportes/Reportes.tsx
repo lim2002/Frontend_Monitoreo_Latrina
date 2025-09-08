@@ -9,11 +9,9 @@ const Reportes = () => {
   const [estado, setEstado] = useState<Estado>('todos');
   const [desde, setDesde] = useState<string>('2025-01-01');
   const [hasta, setHasta] = useState<string>('2025-02-01');
-  const [ruta, setRuta] = useState<string>('todas');
   const [conductor, setConductor] = useState<string>('todos');
   const [vehiculo, setVehiculo] = useState<string>('todos');
   const [cliente, setCliente] = useState<string>('todos');
-  const [zona, setZona] = useState<string>('todas');
 
   // Dummy data for charts (replace with API data)
   const fechas = ['01 Ene', '08 Ene', '15 Ene', '22 Ene', '29 Ene'];
@@ -31,7 +29,7 @@ const Reportes = () => {
       type: 'bar',
       stacked: true,
       toolbar: { show: false },
-      fontFamily: "inherit",
+      fontFamily: 'inherit',
     },
     colors: ['var(--color-primary)', 'var(--color-warning)', 'var(--color-error)'],
     xaxis: { categories: fechas, labels: { style: { colors: '#a1aab2' } } },
@@ -78,13 +76,7 @@ const Reportes = () => {
     <div className="space-y-6">
       <div className="mt-2">
         <h1 className="text-3xl md:text-4xl font-semibold text-center">Reportes</h1>
-      </div>
-
-      {/* Breadcrumb */}
-      <div className="mb-4 text-sm text-dark/70">
-        <span className="font-medium">Menu</span>
-        <span className="mx-2">&gt;</span>
-        <span className="text-dark font-semibold">Reportes</span>
+        <p className="text-sm text-dark/70 mt-2">Menu&gt;Reportes</p>
       </div>
 
       {/* Filtros */}
@@ -106,14 +98,6 @@ const Reportes = () => {
           <div className="col-span-6 md:col-span-2">
             <TextInput type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
           </div>
-
-          <div className="col-span-6 md:col-span-2">
-            <Select value={ruta} onChange={(e) => setRuta(e.target.value)}>
-              <option value="todas">Ruta del día (todas)</option>
-              <option value="ruta-1">Ruta 1</option>
-              <option value="ruta-2">Ruta 2</option>
-            </Select>
-          </div>
           <div className="col-span-6 md:col-span-1">
             <Select value={conductor} onChange={(e) => setConductor(e.target.value)}>
               <option value="todos">Conductor</option>
@@ -134,14 +118,6 @@ const Reportes = () => {
               <option value="acme">ACME</option>
             </Select>
           </div>
-          <div className="col-span-6 md:col-span-1">
-            <Select value={zona} onChange={(e) => setZona(e.target.value)}>
-              <option value="todas">Zona</option>
-              <option value="norte">Norte</option>
-              <option value="sur">Sur</option>
-            </Select>
-          </div>
-
           <div className="col-span-12 md:col-span-1 flex md:justify-end">
             <Button color="primary" className="w-full md:w-auto">Aplicar</Button>
           </div>
@@ -189,3 +165,4 @@ const Reportes = () => {
 };
 
 export default Reportes;
+
