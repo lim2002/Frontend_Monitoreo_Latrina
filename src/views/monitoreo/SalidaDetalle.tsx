@@ -147,7 +147,7 @@ const SalidaDetalle: React.FC = () => {
 
         {/* Acciones */}
         <div className="mt-6 flex items-center justify-between">
-          <Button color={'primary'} className="font-medium" onClick={() => { /* placeholder seguimiento realtime */ }}>
+          <Button color={'primary'} className="font-medium" onClick={() => navigate(`/menu/panel-monitoreo/salidas/${salida?.id || id}/recorrido`)}>
             Ver recorrido
           </Button>
           <Button color={'gray'} onClick={() => navigate(-1)}>Volver</Button>

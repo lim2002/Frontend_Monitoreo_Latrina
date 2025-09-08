@@ -2,6 +2,7 @@ import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeadCell, TableRow, Badge, Button } from 'flowbite-react';
 import { Icon } from '@iconify/react/dist/iconify.js';
 import { useNavigate } from 'react-router';
+import imgHomeConductor from '/src/assets/images/pictures/imagen-home-conductor.jpg';
 
 type PuntoEntrega = {
   id: string;
@@ -42,8 +43,8 @@ const Entregas: React.FC = () => {
 
       {/* Banner/Imagen */}
       <div className="rounded-xl dark:shadow-dark-md shadow-md bg-white dark:bg-darkgray p-4 mb-6">
-        <div className="w-full h-40 md:h-52 bg-gray-200 dark:bg-dark p-4 flex items-center justify-center rounded-lg border border-gray-300/60">
-          <span className="text-gray-500 uppercase tracking-wide">IMAGEN</span>
+        <div className="w-full h-40 md:h-52 rounded-lg overflow-hidden border border-gray-300/60 flex items-center justify-center bg-gray-50 dark:bg-dark">
+          <img src={imgHomeConductor} alt="Entregas del día" className="w-full h-full object-cover" />
         </div>
       </div>
 

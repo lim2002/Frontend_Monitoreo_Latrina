@@ -40,6 +40,7 @@ const ProgramarSalida = Loadable(lazy(() => import("../views/programar-salida/Pr
 const PanelMonitoreo = Loadable(lazy(() => import("../views/monitoreo/PanelMonitoreo")));
 const SalidaDetalle = Loadable(lazy(() => import("../views/monitoreo/SalidaDetalle")));
 const NotaSalidaDetalle = Loadable(lazy(() => import("../views/monitoreo/NotaSalidaDetalle")));
+const RecorridoMapa = Loadable(lazy(() => import("../views/monitoreo/RecorridoMapa")));
 // Reportes
 const Reportes = Loadable(lazy(() => import("../views/reportes/Reportes")));
 
@@ -71,6 +72,7 @@ const Router = [
       { path: '/menu/programar-salida', exact: true, element: <ProgramarSalida /> },
       { path: '/menu/panel-monitoreo', exact: true, element: <PanelMonitoreo /> },
       { path: '/menu/panel-monitoreo/salidas/:id', exact: true, element: <SalidaDetalle /> },
+      { path: '/menu/panel-monitoreo/salidas/:id/recorrido', exact: true, element: <RecorridoMapa /> },
       { path: '/menu/panel-monitoreo/salidas/:id/detalle/:notaId', exact: true, element: <NotaSalidaDetalle /> },
       { path: '/menu/reportes', exact: true, element: <Reportes /> },
       { path: '/sample-page', exact: true, element: <SamplePage /> },
