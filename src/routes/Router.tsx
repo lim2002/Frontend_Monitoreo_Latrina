@@ -11,8 +11,8 @@ import Loadable from 'src/layouts/full/shared/loadable/Loadable';
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
 
-// Dashboard
-const Dashboard = Loadable(lazy(() => import('../views/dashboards/Dashboard')));
+// Home (replaces Dashboard as landing)
+const Home = Loadable(lazy(() => import('../views/home/Home')));
 
 // utilities
 const Typography = Loadable(lazy(() => import("../views/typography/Typography")));
@@ -40,6 +40,8 @@ const ProgramarSalida = Loadable(lazy(() => import("../views/programar-salida/Pr
 const PanelMonitoreo = Loadable(lazy(() => import("../views/monitoreo/PanelMonitoreo")));
 const SalidaDetalle = Loadable(lazy(() => import("../views/monitoreo/SalidaDetalle")));
 const NotaSalidaDetalle = Loadable(lazy(() => import("../views/monitoreo/NotaSalidaDetalle")));
+// Reportes
+const Reportes = Loadable(lazy(() => import("../views/reportes/Reportes")));
 
 // authentication
 const Login = Loadable(lazy(() => import('../views/auth/login/Login')));
@@ -52,7 +54,7 @@ const Router = [
     path: '/',
     element: <FullLayout />,
     children: [
-      { path: '/', exact: true, element: <Dashboard/> },
+      { path: '/', exact: true, element: <Home/> },
       { path: '/ui/typography', exact: true, element: <Typography/> },
       { path: '/ui/table', exact: true, element: <Table/> },
       { path: '/ui/form', exact: true, element: <Form/> },
@@ -70,6 +72,7 @@ const Router = [
       { path: '/menu/panel-monitoreo', exact: true, element: <PanelMonitoreo /> },
       { path: '/menu/panel-monitoreo/salidas/:id', exact: true, element: <SalidaDetalle /> },
       { path: '/menu/panel-monitoreo/salidas/:id/detalle/:notaId', exact: true, element: <NotaSalidaDetalle /> },
+      { path: '/menu/reportes', exact: true, element: <Reportes /> },
       { path: '/sample-page', exact: true, element: <SamplePage /> },
       { path: '*', element: <Navigate to="/auth/404" /> },
     ],

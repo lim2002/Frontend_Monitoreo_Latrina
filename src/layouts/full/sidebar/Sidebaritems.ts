@@ -80,7 +80,7 @@ const SidebarContent: MenuItem[] = [
   },
   //Menu del conductor
   {
-    heading: 'Menu Conductor',
+    heading: 'Menu',
     children: [
       {
         name: 'Entregas',

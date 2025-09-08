@@ -29,16 +29,9 @@ const Header = () => {
             </div>
 
             <div className="flex gap-4 items-center">
-              <Button
-                as={Link}
-                to="https://www.wrappixel.com/templates/spike-react-tailwind-admin-template/?ref=376#demos"
-                target="_blank"
-               
-                color={'primary'}
-                className="rounded-full py-1 px-5 font-medium"
-              >
-                Check Pro Template
-              </Button>
+              <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-200">
+                Bienvenido usuario
+              </span>
               <Profile />
             </div>
           </div>
