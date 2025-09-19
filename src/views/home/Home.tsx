@@ -1,10 +1,10 @@
-import logo from '/src/assets/images/pictures/imagen-home.jpg';
+import logo from "/src/assets/images/pictures/imagen-home.jpg";
 
 const Home = () => {
   return (
     <div className="p-6 md:p-8">
       <h1 className="text-2xl md:text-3xl font-semibold text-center mb-6">
-        Sistema de Monitoreo de Distribución "Latrina Cover"
+        Sistema de Monitoreo de Distribucion "Latrina Cover"
       </h1>
 
       <div className="border border-gray-300 rounded-lg bg-gray-100 dark:bg-gray-800 p-6 md:p-10">
@@ -15,10 +15,9 @@ const Home = () => {
         </div>
 
         <p className="mt-8 text-gray-700 dark:text-gray-200 max-w-4xl mx-auto text-justify">
-          Bienvenido al sistema de monitoreo de distribución. Esta plataforma
-          permite visualizar el estado de las salidas, el seguimiento de
-          entregas y el control de flota en tiempo real. Use el menú para
-          navegar entre los módulos y gestionar la operación de forma sencilla.
+          Bienvenido al sistema de monitoreo de distribucion. Esta plataforma permite visualizar el estado de las
+          salidas, el seguimiento de entregas y el control de flota en tiempo real. Use el menu para navegar entre los
+          modulos y gestionar la operacion de forma sencilla.
         </p>
       </div>
     </div>
@@ -26,4 +25,3 @@ const Home = () => {
 };
 
 export default Home;
-

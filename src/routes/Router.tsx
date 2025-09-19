@@ -11,8 +11,10 @@ import Loadable from 'src/layouts/full/shared/loadable/Loadable';
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
 
-// Home (replaces Dashboard as landing)
-const Home = Loadable(lazy(() => import('../views/home/Home')));
+// Home principal (dentro del layout con menú)
+import Home from '../views/home/Home';
+// Pantalla de bienvenida (sin menú)
+const Welcome = Loadable(lazy(() => import('../views/landing/Welcome')));
 
 // utilities
 const Typography = Loadable(lazy(() => import("../views/typography/Typography")));
@@ -51,11 +53,24 @@ const SamplePage = Loadable(lazy(() => import('../views/sample-page/SamplePage')
 const Error = Loadable(lazy(() => import('../views/auth/error/Error')));
 
 const Router = [
+  // Primero: rutas sin menú (pantalla de bienvenida y auth)
+  {
+    path: '/',
+    element: <BlankLayout />,
+    children: [
+      { path: '/', exact: true, element: <Welcome /> },
+      { path: '/auth/login', element: <Login /> },
+      { path: '/auth/register', element: <Register /> },
+      { path: '404', element: <Error /> },
+      { path: '/auth/404', element: <Error /> },
+    ],
+  },
+  // Después: rutas del app con menú
   {
     path: '/',
     element: <FullLayout />,
     children: [
-      { path: '/', exact: true, element: <Home/> },
+      { path: '/inicio', exact: true, element: <Home/> },
       { path: '/ui/typography', exact: true, element: <Typography/> },
       { path: '/ui/table', exact: true, element: <Table/> },
       { path: '/ui/form', exact: true, element: <Form/> },
@@ -79,18 +94,6 @@ const Router = [
       { path: '*', element: <Navigate to="/auth/404" /> },
     ],
   },
-  {
-    path: '/',
-    element: <BlankLayout />,
-    children: [
-      { path: '/auth/login', element: <Login /> },
-      { path: '/auth/register', element: <Register /> },
-      { path: '404', element: <Error /> },
-      { path: '/auth/404', element: <Error /> },
-      { path: '*', element: <Navigate to="/auth/404" /> },
-    ],
-  }
-  ,
 ];
 
 const router = createBrowserRouter(Router)

@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 
 const Logo = () => {
   return (
-   <Link to={'/'}>
+   <Link to={'/inicio'}>
       <img src={LogoIcon} alt="logo" />
     </Link>
   )

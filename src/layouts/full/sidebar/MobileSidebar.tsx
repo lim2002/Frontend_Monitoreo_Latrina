@@ -8,6 +8,21 @@ import FullLogo from "../shared/logo/FullLogo";
 import 'simplebar-react/dist/simplebar.min.css';
 
 const MobileSidebar = () => {
+  // Determine role from localStorage (supports 'role' or 'rol').
+  const role =
+    (typeof window !== "undefined" && (localStorage.getItem("role") || localStorage.getItem("rol"))) ||
+    "administrador";
+
+  // Filter sidebar sections based on role.
+  const filteredSidebar = React.useMemo(() => {
+    if (role?.toLowerCase() === "administrador") {
+      return SidebarContent.filter((s) => s.heading === "Menu Administrador");
+    }
+    if (role?.toLowerCase() === "conductor") {
+      return SidebarContent.filter((s) => s.heading === "Menu");
+    }
+    return SidebarContent;
+  }, [role]);
   return (
     <>
       <div>
@@ -21,8 +36,8 @@ const MobileSidebar = () => {
           <SimpleBar className="h-[calc(100vh_-_242px)]">
             <SidebarItems className=" mt-2">
               <SidebarItemGroup className="sidebar-nav hide-menu">
-                {SidebarContent &&
-                  SidebarContent?.map((item, index) => (
+                {filteredSidebar &&
+                  filteredSidebar?.map((item, index) => (
                     <div className="caption" key={item.heading}>
                       <React.Fragment key={index}>
                         <h5 className="text-dark/60 uppercase font-medium leading-6 text-xs pb-2 ps-6">
