@@ -1,22 +1,30 @@
-import { useState } from 'react';
-import { Button, DrawerItems, Navbar } from 'flowbite-react';
+import { useState, useMemo } from 'react';
+import { Drawer, DrawerItems, Navbar } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import Profile from './Profile';
 import Notification from './notification';
-import { Drawer } from 'flowbite-react';
 import MobileSidebar from '../sidebar/MobileSidebar';
-import { Link } from 'react-router';
+import { useAuth } from 'src/context/AuthContext';
 
 const Header = () => {
-  // mobile-sidebar
   const [isOpen, setIsOpen] = useState(false);
+  const { auth } = useAuth();
+
   const handleClose = () => setIsOpen(false);
+
+  const welcomeLabel = useMemo(() => {
+    if (!auth.isAuthenticated) {
+      return 'Bienvenido';
+    }
+    const roleLabel = auth.roleName ? auth.roleName.charAt(0).toUpperCase() + auth.roleName.slice(1) : 'Usuario';
+    const idLabel = auth.userId ? ` #${auth.userId}` : '';
+    return `${roleLabel}${idLabel}`;
+  }, [auth]);
+
   return (
     <>
       <header>
         <Navbar fluid className={`rounded-lg bg-white shadow-md  py-4 `}>
-          {/* Mobile Toggle Icon */}
-
           <div className="flex gap-3 items-center justify-between w-full ">
             <div className="flex gap-2 items-center">
               <span
@@ -29,16 +37,13 @@ const Header = () => {
             </div>
 
             <div className="flex gap-4 items-center">
-              <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-200">
-                Bienvenido usuario
-              </span>
+              <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-200">{welcomeLabel}</span>
               <Profile />
             </div>
           </div>
         </Navbar>
       </header>
 
-      {/* Mobile Sidebar */}
       <Drawer open={isOpen} onClose={handleClose} className='w-64'>
         <DrawerItems>
           <MobileSidebar />

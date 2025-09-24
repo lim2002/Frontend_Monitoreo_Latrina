@@ -1,10 +1,18 @@
-
 import { Button, Dropdown, DropdownItem } from "flowbite-react";
 import { Icon } from "@iconify/react";
 import user1 from "/src/assets/images/profile/user-1.jpg";
-import { Link } from "react-router";
+import { useNavigate } from "react-router";
+import { useAuth } from "src/context/AuthContext";
 
 const Profile = () => {
+  const navigate = useNavigate();
+  const { clearAuth } = useAuth();
+
+  const handleLogout = () => {
+    clearAuth();
+    navigate("/auth/login", { replace: true });
+  };
+
   return (
     <div className="relative group/menu">
       <Dropdown
@@ -23,17 +31,18 @@ const Profile = () => {
           </span>
         )}
       >
-
-        <DropdownItem
-          as={Link}
-          to="#"
-          className="px-3 py-3 flex items-center bg-hover group/link w-full gap-3 text-dark"
-        >
+        <DropdownItem className="px-3 py-3 flex items-center bg-hover group/link w-full gap-3 text-dark">
           <Icon icon="solar:user-circle-outline" height={20} />
           Perfil
         </DropdownItem>
         <div className="p-3 pt-0">
-        <Button as={Link}  size={'sm'}  to="/auth/login" className="mt-2 border border-primary text-primary bg-transparent hover:bg-lightprimary outline-none focus:outline-none">Salir</Button>
+          <Button
+            size="sm"
+            onClick={handleLogout}
+            className="mt-2 border border-primary text-primary bg-transparent hover:bg-lightprimary outline-none focus:outline-none"
+          >
+            Salir
+          </Button>
         </div>
       </Dropdown>
     </div>

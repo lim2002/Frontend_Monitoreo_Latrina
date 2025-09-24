@@ -1,28 +1,29 @@
-
 import { Sidebar, SidebarItemGroup, SidebarItems } from "flowbite-react";
 import SidebarContent from "./Sidebaritems";
 import NavItems from "./NavItems";
 import SimpleBar from "simplebar-react";
 import React from "react";
 import FullLogo from "../shared/logo/FullLogo";
-import 'simplebar-react/dist/simplebar.min.css';
+import "simplebar-react/dist/simplebar.min.css";
+import { useAuth } from "src/context/AuthContext";
 
 const MobileSidebar = () => {
-  // Determine role from localStorage (supports 'role' or 'rol').
-  const role =
-    (typeof window !== "undefined" && (localStorage.getItem("role") || localStorage.getItem("rol"))) ||
-    "administrador";
+  const { auth } = useAuth();
+  const roleFromStorage =
+    (typeof window !== "undefined" && (localStorage.getItem("role") || localStorage.getItem("rol"))) || null;
+  const role = auth.roleName || roleFromStorage || "administrador";
+  const normalizedRole = role?.toLowerCase();
 
-  // Filter sidebar sections based on role.
   const filteredSidebar = React.useMemo(() => {
-    if (role?.toLowerCase() === "administrador") {
+    if (normalizedRole === "administrador") {
       return SidebarContent.filter((s) => s.heading === "Menu Administrador");
     }
-    if (role?.toLowerCase() === "conductor") {
+    if (normalizedRole === "conductor") {
       return SidebarContent.filter((s) => s.heading === "Menu");
     }
     return SidebarContent;
-  }, [role]);
+  }, [normalizedRole]);
+
   return (
     <>
       <div>
@@ -36,25 +37,23 @@ const MobileSidebar = () => {
           <SimpleBar className="h-[calc(100vh_-_242px)]">
             <SidebarItems className=" mt-2">
               <SidebarItemGroup className="sidebar-nav hide-menu">
-                {filteredSidebar &&
-                  filteredSidebar?.map((item, index) => (
-                    <div className="caption" key={item.heading}>
-                      <React.Fragment key={index}>
-                        <h5 className="text-dark/60 uppercase font-medium leading-6 text-xs pb-2 ps-6">
-                          {item.heading}
-                        </h5>
-                        {item.children?.map((child, index) => (
-                          <React.Fragment key={child.id && index}>
-                              <NavItems item={child} />
-                          </React.Fragment>
-                        ))}
-                      </React.Fragment>
-                    </div>
-                  ))}
+                {filteredSidebar?.map((item, index) => (
+                  <div className="caption" key={item.heading}>
+                    <React.Fragment key={index}>
+                      <h5 className="text-dark/60 uppercase font-medium leading-6 text-xs pb-2 ps-6">
+                        {item.heading}
+                      </h5>
+                      {item.children?.map((child, childIndex) => (
+                        <React.Fragment key={child.id && childIndex}>
+                          <NavItems item={child} />
+                        </React.Fragment>
+                      ))}
+                    </React.Fragment>
+                  </div>
+                ))}
               </SidebarItemGroup>
             </SidebarItems>
           </SimpleBar>
-          {/* Upgrade component removed per request */}
         </Sidebar>
       </div>
     </>

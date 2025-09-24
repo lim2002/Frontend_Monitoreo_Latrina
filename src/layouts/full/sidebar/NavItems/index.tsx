@@ -2,18 +2,30 @@ import React from 'react';
 import { ChildItem } from '../Sidebaritems';
 import { SidebarItem } from 'flowbite-react';
 import { Icon } from '@iconify/react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { useAuth } from 'src/context/AuthContext';
 
 interface NavItemsProps {
   item: ChildItem;
 }
+
 const NavItems: React.FC<NavItemsProps> = ({ item }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { clearAuth } = useAuth();
   const pathname = location.pathname;
+
+  const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (item.url === '/auth/login') {
+      event.preventDefault();
+      clearAuth();
+      navigate('/auth/login', { replace: true });
+    }
+  };
 
   return (
     <>
-      <Link to={item.url} target={item.isPro ? 'blank' : '_self'}>
+      <Link to={item.url} onClick={handleClick} target={item.isPro ? 'blank' : '_self'}>
         <SidebarItem
           className={`realtive mb-1 sidebar-link  relative  py-0 ps-6 pe-4  ${
             item.url == pathname
