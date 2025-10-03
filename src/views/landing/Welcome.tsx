@@ -12,7 +12,7 @@ const Welcome = () => {
       return;
     }
 
-    const target = auth.roleId === 1 ? '/menu/programar-salida' : auth.roleId === 2 ? '/menu/entregas' : '/inicio';
+    const target = auth.roleId === 2 ? '/menu/programar-salida' : auth.roleId === 104 ? '/menu/entregas' : '/inicio';
 
     if (`${window.location.pathname}${window.location.search}` !== target) {
       navigate(target, { replace: true });

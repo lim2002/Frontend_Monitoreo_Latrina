@@ -1,64 +1,161 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeadCell, TableRow, Button, TextInput, Badge } from 'flowbite-react';
 import { Icon } from '@iconify/react/dist/iconify.js';
 import { useNavigate } from 'react-router';
+import { useAuthorizedApi } from 'src/hooks/useAuthorizedApi';
 
-type Item = {
+type ProgramacionApi = {
+  idProgramacion: number | string;
+  fechaEntrega?: string | null;
+  estadoEntrega?: number | null;
+  status?: number | null;
+};
+
+type ProgramacionItem = {
   id: string;
-  fecha: string; // ISO YYYY-MM-DD
-  nroSalida: string;
-  estado: 'Terminado' | 'En proceso' | 'Pendiente';
+  fechaEntrega: string | null;
+  estadoEntrega: number | null;
 };
 
-const dataMock: Item[] = [
-  { id: '1', fecha: '2025-05-10', nroSalida: '1129994-444', estado: 'Terminado' },
-  { id: '2', fecha: '2025-05-14', nroSalida: '1129994-584', estado: 'Terminado' },
-  { id: '3', fecha: '2025-05-20', nroSalida: '1129994-854', estado: 'En proceso' },
-];
-
-const formatDDMMYYYY = (iso: string) => {
-  const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y}`;
+const formatDateDisplay = (value: string | null): string => {
+  if (!value) {
+    return 'Sin fecha';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 };
 
-const colorForEstado = (estado: Item['estado']) => {
+const formatDateForApi = (value: string): string => {
+  if (!value) {
+    return '';
+  }
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) {
+    return '';
+  }
+  return `${day}-${month}-${year}`;
+};
+
+const mapEstadoEntrega = (estado: number | null) => {
   switch (estado) {
-    case 'Terminado':
-      return { badge: 'lightsuccess', cls: 'border-success text-success' };
-    case 'En proceso':
-      return { badge: 'lightwarning', cls: 'border-warning text-warning' };
+    case 0:
+      return { label: 'En proceso', badge: 'lightwarning', cls: 'border-warning text-warning' };
+    case 1:
+      return { label: 'Entregado', badge: 'lightsuccess', cls: 'border-success text-success' };
+    case 2:
+      return { label: 'Atrasado', badge: 'lighterror', cls: 'border-error text-error' };
     default:
-      return { badge: 'lightsecondary', cls: 'border-secondary text-secondary' };
+      return { label: 'Sin estado', badge: 'lightsecondary', cls: 'border-secondary text-secondary' };
   }
 };
 
+const mapProgramacion = (programacion: ProgramacionApi): ProgramacionItem => ({
+  id: String(programacion.idProgramacion),
+  fechaEntrega: programacion.fechaEntrega ?? null,
+  estadoEntrega: programacion.estadoEntrega ?? null,
+});
+
+type SearchParams = {
+  nro: string;
+  desde: string;
+  hasta: string;
+};
+
 const PanelMonitoreo: React.FC = () => {
-  const [q, setQ] = useState('');
-  const [desde, setDesde] = useState(''); // YYYY-MM-DD
-  const [hasta, setHasta] = useState(''); // YYYY-MM-DD
   const navigate = useNavigate();
+  const { token, authorizedFetch } = useAuthorizedApi();
 
-  const filtrados = useMemo(() => {
-    return dataMock.filter((it) => {
-      const inQuery = (() => {
-        if (!q.trim()) return true;
-        const txt = q.toLowerCase();
-        return (
-          it.nroSalida.toLowerCase().includes(txt) ||
-          formatDDMMYYYY(it.fecha).toLowerCase().includes(txt) ||
-          it.fecha.includes(txt)
-        );
-      })();
+  const [nro, setNro] = useState('');
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
+  const [searchParams, setSearchParams] = useState<SearchParams>({ nro: '', desde: '', hasta: '' });
 
-      const inDesde = desde ? it.fecha >= desde : true;
-      const inHasta = hasta ? it.fecha <= hasta : true;
-      return inQuery && inDesde && inHasta;
+  const [items, setItems] = useState<ProgramacionItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) {
+      setItems([]);
+      return;
+    }
+
+    let isMounted = true;
+    const controller = new AbortController();
+
+    const nroParam = searchParams.nro.trim();
+    const desdeParam = formatDateForApi(searchParams.desde);
+    const hastaParam = formatDateForApi(searchParams.hasta);
+
+    const query = new URLSearchParams({
+      nro: nroParam,
+      desde: desdeParam,
+      hasta: hastaParam,
     });
-  }, [q, desde, hasta]);
+
+    const fetchProgramaciones = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await authorizedFetch(`/api/v1/programacion-distribucion/all?${query.toString()}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Error al obtener las programaciones (${response.status}).`);
+        }
+
+        const json = (await response.json()) as { data?: ProgramacionApi[] };
+        if (!isMounted) {
+          return;
+        }
+
+        const records = Array.isArray(json.data) ? json.data.map(mapProgramacion) : [];
+        setItems(records);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        console.error('Error al obtener programaciones', error);
+        if (isMounted) {
+          setError('No se pudieron cargar las programaciones. Intenta nuevamente.');
+          setItems([]);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void fetchProgramaciones();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [authorizedFetch, searchParams, token]);
+
+  const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSearchParams({ nro: nro.trim(), desde, hasta });
+  };
+
+  const handleClear = () => {
+    setNro('');
+    setDesde('');
+    setHasta('');
+    setSearchParams({ nro: '', desde: '', hasta: '' });
+  };
+
+  const programaciones = useMemo(() => items, [items]);
 
   return (
     <>
-      {/* Breadcrumb */}
       <div className="mb-4 text-sm text-dark/70">
         <span className="font-medium">Menu</span>
         <span className="mx-2">&gt;</span>
@@ -67,18 +164,17 @@ const PanelMonitoreo: React.FC = () => {
 
       <h3 className="text-2xl font-semibold text-center mb-4">Panel de Monitoreo</h3>
 
-      {/* Filtros */}
       <div className="rounded-xl dark:shadow-dark-md shadow-md bg-white dark:bg-darkgray p-6 mb-6">
-        <div className="grid grid-cols-12 gap-4 items-end">
+        <form className="grid grid-cols-12 gap-4 items-end" onSubmit={handleSearch}>
           <div className="md:col-span-4 col-span-12">
             <div className="relative w-full">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/60">
                 <Icon icon="solar:magnifer-linear" width={20} />
               </span>
               <TextInput
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Ingresa Nro. de salida"
+                value={nro}
+                onChange={(e) => setNro(e.target.value)}
+                placeholder="Ingresa Nro. programacion"
                 className="pl-9 form-control form-rounded-xl"
               />
             </div>
@@ -91,50 +187,67 @@ const PanelMonitoreo: React.FC = () => {
             <label className="mb-2 block text-sm text-dark/80">Hasta</label>
             <TextInput type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="form-control form-rounded-xl" />
           </div>
-          <div className="md:col-span-2 col-span-12">
-            <Button color={'gray'} onClick={() => { setQ(''); setDesde(''); setHasta(''); }} className="w-full">Limpiar</Button>
+          <div className="md:col-span-2 col-span-12 flex gap-2">
+            <Button type="submit" color="primary" className="w-full" disabled={loading}>
+              {loading ? 'Buscando...' : 'Buscar'}
+            </Button>
+            <Button type="button" color="light" onClick={handleClear} className="w-full" disabled={loading}>
+              Limpiar
+            </Button>
           </div>
-        </div>
+        </form>
+        {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       </div>
 
-      {/* Tabla */}
       <div className="rounded-xl dark:shadow-dark-md shadow-md bg-white dark:bg-darkgray p-6  relative w-full break-words">
-        <h5 className="card-title text-center">Salidas programadas en curso</h5>
+        <h5 className="card-title text-center">Programacion de Distribucion de Salidas</h5>
         <div className="mt-3 overflow-x-auto">
           <Table hoverable>
             <TableHead className="border-b border-gray-300">
-              <TableHeadCell className="p-6 text-base">Fecha de Distribución</TableHeadCell>
-              <TableHeadCell className="text-base">Nro. Salida</TableHeadCell>
-              <TableHeadCell className="text-base">Estado</TableHeadCell>
-              <TableHeadCell className="text-base">Opciones</TableHeadCell>
+              <TableRow>
+                <TableHeadCell className="p-6 text-base">Fecha de Distribucion</TableHeadCell>
+                <TableHeadCell className="text-base">Nro. Programacion</TableHeadCell>
+                <TableHeadCell className="text-base">Estado</TableHeadCell>
+                <TableHeadCell className="text-base">Opciones</TableHeadCell>
+              </TableRow>
             </TableHead>
             <TableBody className="divide-y divide-gray-300">
-              {filtrados.map((it) => {
-                const c = colorForEstado(it.estado);
-                return (
-                  <TableRow key={it.id}>
-                    <TableCell className="whitespace-nowrap ps-6">
-                      <span className="text-sm">{formatDDMMYYYY(it.fecha)}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{it.nroSalida}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge color={c.badge} className={`border ${c.cls}`}>{it.estado}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <button title="Ver" className="hover:text-primary" onClick={() => navigate(`/menu/panel-monitoreo/salidas/${it.id}`)}>
-                          <Icon icon="solar:eye-linear" width={20} />
-                        </button>
-                        <button title="Eliminar" className="hover:text-error">
-                          <Icon icon="solar:trash-bin-minimalistic-linear" width={20} />
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {programaciones.length === 0 && !loading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-6">
+                    <span className="text-sm text-dark/60">No se encontraron programaciones.</span>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                programaciones.map((programacion) => {
+                  const estado = mapEstadoEntrega(programacion.estadoEntrega);
+                  return (
+                    <TableRow key={programacion.id}>
+                      <TableCell className="whitespace-nowrap ps-6">
+                        <span className="text-sm">{formatDateDisplay(programacion.fechaEntrega)}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{programacion.id}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge color={estado.badge} className={`border ${estado.cls}`}>
+                          {estado.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <button title="Ver" className="hover:text-primary" onClick={() => navigate(`/menu/panel-monitoreo/salidas/${programacion.id}`)}>
+                            <Icon icon="solar:eye-linear" width={20} />
+                          </button>
+                          <button title="Eliminar" className="hover:text-error" disabled>
+                            <Icon icon="solar:trash-bin-minimalistic-linear" width={20} />
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>

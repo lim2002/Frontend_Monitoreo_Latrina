@@ -1,26 +1,34 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Label, Select, TextInput } from 'flowbite-react';
-import { Icon } from '@iconify/react/dist/iconify.js';
 import { useNavigate } from 'react-router';
+import { useAuthorizedApi } from 'src/hooks/useAuthorizedApi';
 
 type EstadoVehiculo = 'Nuevo' | 'Semi Nuevo';
 
-type Dispositivo = {
-  id: string;
-  imei: string;
-  modelo: string;
-  descripcion: string; // para mostrar combinado
+type DispositivoApi = {
+  idDispositivo: number | string;
+  codigo?: string | null;
+  modelo?: string | null;
+  activo?: number | null;
+  status?: number | null;
 };
 
-const dispositivosMock: Dispositivo[] = [
-  { id: '1', imei: 'SDKJFKSDF9Q3', modelo: 'Coban GPS303', descripcion: 'SDKJFKSDF9Q3, Coban GPS303' },
-  { id: '2', imei: 'SDJFHDSF7374', modelo: 'TK103-2B', descripcion: 'SDJFHDSF7374, TK103-2B' },
-  { id: '3', imei: 'HJFFJKD23834', modelo: 'TK103-2B', descripcion: 'HJFFJKD23834, TK103-2B' },
-  { id: '4', imei: 'SDKGFLKf4933', modelo: 'Coban GPS303', descripcion: 'SDKGFLKf4933, Coban GPS303' },
-];
+type DispositivoOption = {
+  id: string;
+  label: string;
+};
+
+const sanitize = (value?: string | null): string => (value ?? '').trim();
+
+const buildDispositivoLabel = (item: DispositivoApi): string => {
+  const codigo = sanitize(item.codigo) || 'Sin codigo';
+  const modelo = sanitize(item.modelo) || 'Sin modelo';
+  return `${codigo} - ${modelo}`;
+};
 
 const VehiculoForm: React.FC = () => {
   const navigate = useNavigate();
+  const { token, authorizedFetch } = useAuthorizedApi();
 
   const [placa, setPlaca] = useState('');
   const [marca, setMarca] = useState('');
@@ -29,68 +37,204 @@ const VehiculoForm: React.FC = () => {
   const [capacidadKg, setCapacidadKg] = useState('');
   const [estado, setEstado] = useState<EstadoVehiculo>('Nuevo');
   const [fechaMantenimiento, setFechaMantenimiento] = useState('');
-
-  const [queryDispositivo, setQueryDispositivo] = useState('');
   const [dispositivoId, setDispositivoId] = useState('');
 
-  const dispositivosFiltrados = useMemo(() => {
-    const q = queryDispositivo.trim().toLowerCase();
-    if (!q) return dispositivosMock;
-    return dispositivosMock.filter(
-      (d) => d.imei.toLowerCase().includes(q) || d.modelo.toLowerCase().includes(q)
-    );
-  }, [queryDispositivo]);
+  const [dispositivos, setDispositivos] = useState<DispositivoOption[]>([]);
+  const [dispositivosLoading, setDispositivosLoading] = useState(false);
+  const [dispositivosError, setDispositivosError] = useState<string | null>(null);
 
-  const handleGuardar = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Aquí enviarías los datos al backend.
-    // Por ahora, volvemos a la lista de vehículos.
-    navigate('/menu/vehiculos');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) {
+      setDispositivos([]);
+      setDispositivoId('');
+      return;
+    }
+
+    let isMounted = true;
+    const controller = new AbortController();
+
+    const obtenerDispositivos = async (): Promise<void> => {
+      setDispositivosLoading(true);
+      setDispositivosError(null);
+      try {
+        const response = await authorizedFetch('/api/v1/dispositivosGps/disponibles', {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Error al obtener dispositivos (${response.status}).`);
+        }
+
+        const json = (await response.json()) as { data?: DispositivoApi[] };
+        if (!isMounted) {
+          return;
+        }
+
+        const options = Array.isArray(json.data)
+          ? json.data.map((item) => ({
+              id: String(item.idDispositivo),
+              label: buildDispositivoLabel(item),
+            }))
+          : [];
+
+        setDispositivos(options);
+        setDispositivoId((prev) => (prev && options.some((opt) => opt.id === prev) ? prev : ''));
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        console.error('Error al obtener dispositivos', error);
+        if (isMounted) {
+          setDispositivosError('No se pudieron cargar los dispositivos. Registra uno nuevo antes de continuar.');
+          setDispositivos([]);
+          setDispositivoId('');
+        }
+      } finally {
+        if (isMounted) {
+          setDispositivosLoading(false);
+        }
+      }
+    };
+
+    void obtenerDispositivos();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [authorizedFetch, token]);
+
+  const recordarRegistroDispositivo = () => {
+    alert('Recuerda registrar el dispositivo GPS en el sistema antes de asociarlo a un vehiculo.');
+  };
+
+  const resetForm = () => {
+    setPlaca('');
+    setMarca('');
+    setModelo('');
+    setAnio('');
+    setCapacidadKg('');
+    setEstado('Nuevo');
+    setFechaMantenimiento('');
+    setDispositivoId('');
+  };
+
+  const handleGuardar = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!token) {
+      setSubmitError('No se encontro un token de autenticacion. Vuelve a iniciar sesion.');
+      return;
+    }
+
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    if (!dispositivoId) {
+      setSubmitError('Selecciona un dispositivo GPS disponible.');
+      return;
+    }
+
+    const parsedAnio = anio.trim() ? Number(anio.trim()) : null;
+    if (parsedAnio !== null && (Number.isNaN(parsedAnio) || parsedAnio < 1900)) {
+      setSubmitError('El anio del vehiculo no es valido.');
+      return;
+    }
+
+    const parsedCapacidad = capacidadKg.trim() ? Number(capacidadKg.trim()) : null;
+    if (parsedCapacidad !== null && (Number.isNaN(parsedCapacidad) || parsedCapacidad < 0)) {
+      setSubmitError('La capacidad del vehiculo debe ser un numero valido.');
+      return;
+    }
+
+    const payload = {
+      idDispositivoGps: Number(dispositivoId),
+      placa: sanitize(placa),
+      marca: sanitize(marca),
+      modelo: sanitize(modelo),
+      anio: parsedAnio,
+      capacidadKg: parsedCapacidad,
+      estadoVehiculo: estado,
+      fechaUltimoMantenimiento: fechaMantenimiento || null,
+      status: 1,
+    };
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await authorizedFetch('/api/v1/vehiculos/add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `Error al registrar el vehiculo (${response.status}).`);
+      }
+
+      setSubmitSuccess('Vehiculo registrado correctamente.');
+      resetForm();
+      setTimeout(() => {
+        navigate('/menu/vehiculos');
+      }, 1500);
+    } catch (error) {
+      console.error('Error al registrar vehiculo', error);
+      setSubmitError(error instanceof Error ? error.message : 'No se pudo registrar el vehiculo.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancelar = () => navigate('/menu/vehiculos');
 
+  const dispositivosOptions = useMemo(() => dispositivos, [dispositivos]);
+
   return (
     <form onSubmit={handleGuardar}>
-      {/* Breadcrumb */}
       <div className="mb-4 text-sm text-dark/70">
         <span className="font-medium">Menu</span>
         <span className="mx-2">&gt;</span>
-        <span className="font-medium">Vehículos</span>
+        <span className="font-medium">Vehiculos</span>
         <span className="mx-2">&gt;</span>
         <span className="text-dark font-semibold">Registro</span>
       </div>
 
-      <h3 className="text-2xl font-semibold text-center mb-4">Formulario de registro de vehículo</h3>
+      <h3 className="text-2xl font-semibold text-center mb-4">Formulario de registro de vehiculo</h3>
 
       <div className="rounded-xl dark:shadow-dark-md shadow-md bg-white dark:bg-darkgray p-6">
         <div className="grid grid-cols-12 gap-6">
-          {/* Columna izquierda */}
           <div className="xl:col-span-6 col-span-12">
             <h6 className="text-base font-medium mb-4">Ingrese los datos.</h6>
             <div className="flex flex-col gap-4">
               <div>
                 <Label className="mb-2 block">Placa</Label>
-                <TextInput value={placa} onChange={(e) => setPlaca(e.target.value)} placeholder="ej. HHDF 112" className="form-control form-rounded-xl" required />
+                <TextInput value={placa} onChange={(e) => setPlaca(e.target.value)} placeholder="ej. ABC-1234" className="form-control form-rounded-xl" required />
               </div>
               <div>
                 <Label className="mb-2 block">Marca</Label>
-                <TextInput value={marca} onChange={(e) => setMarca(e.target.value)} placeholder="ej. Volvo" className="form-control form-rounded-xl" required />
+                <TextInput value={marca} onChange={(e) => setMarca(e.target.value)} placeholder="ej. Toyota" className="form-control form-rounded-xl" required />
               </div>
               <div>
                 <Label className="mb-2 block">Modelo</Label>
-                <TextInput value={modelo} onChange={(e) => setModelo(e.target.value)} placeholder="ej. Volvo FX 234" className="form-control form-rounded-xl" required />
+                <TextInput value={modelo} onChange={(e) => setModelo(e.target.value)} placeholder="ej. Hilux" className="form-control form-rounded-xl" required />
               </div>
               <div>
-                <Label className="mb-2 block">Año</Label>
-                <TextInput value={anio} onChange={(e) => setAnio(e.target.value)} placeholder="ej. 2022" className="form-control form-rounded-xl" />
+                <Label className="mb-2 block">Anio</Label>
+                <TextInput value={anio} onChange={(e) => setAnio(e.target.value)} placeholder="ej. 2021" className="form-control form-rounded-xl" />
               </div>
               <div>
-                <Label className="mb-2 block">Capacidad del vehículo (Kg.)</Label>
-                <TextInput value={capacidadKg} onChange={(e) => setCapacidadKg(e.target.value)} placeholder="3000" className="form-control form-rounded-xl" />
+                <Label className="mb-2 block">Capacidad del vehiculo (Kg)</Label>
+                <TextInput value={capacidadKg} onChange={(e) => setCapacidadKg(e.target.value)} placeholder="1500" className="form-control form-rounded-xl" />
               </div>
               <div>
-                <Label className="mb-2 block">Estado del vehículo</Label>
+                <Label className="mb-2 block">Estado del vehiculo</Label>
                 <Select value={estado} onChange={(e) => setEstado(e.target.value as EstadoVehiculo)} className="select-md">
                   <option>Nuevo</option>
                   <option>Semi Nuevo</option>
@@ -103,55 +247,55 @@ const VehiculoForm: React.FC = () => {
             </div>
           </div>
 
-          {/* Separador visual */}
           <div className="xl:col-span-1 col-span-12 hidden xl:block">
             <div className="w-px h-full bg-black/10 mx-auto" />
           </div>
 
-          {/* Columna derecha */}
           <div className="xl:col-span-5 col-span-12">
-            <h6 className="text-base font-medium mb-4">Seleccione el dispositivo GPS instalado en el vehículo</h6>
+            <h6 className="text-base font-medium mb-4">Seleccione el dispositivo GPS instalado en el vehiculo</h6>
             <div className="flex flex-col gap-4">
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/60">
-                  <Icon icon="solar:magnifer-linear" width={20} />
-                </span>
-                <TextInput
-                  value={queryDispositivo}
-                  onChange={(e) => setQueryDispositivo(e.target.value)}
-                  placeholder="Ingresa IMEI o Modelo"
-                  className="pl-9 form-control form-rounded-xl"
-                />
-              </div>
+              <Button type="button" color="warning" onClick={recordarRegistroDispositivo} className="w-full md:w-fit">
+                Recordatorio: registra el dispositivo GPS primero
+              </Button>
               <div>
-                <Select value={dispositivoId} onChange={(e) => setDispositivoId(e.target.value)} className="select-md h-48" required>
+                <Select
+                  value={dispositivoId}
+                  onChange={(e) => setDispositivoId(e.target.value)}
+                  className="select-md"
+                  required
+                  disabled={dispositivosLoading || dispositivosOptions.length === 0}
+                >
                   <option value="" disabled>
-                    Seleccione un dispositivo
+                    {dispositivosLoading ? 'Cargando dispositivos...' : 'Selecciona un dispositivo disponible'}
                   </option>
-                  {dispositivosFiltrados.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.descripcion}
+                  {dispositivosOptions.map((dispositivo) => (
+                    <option key={dispositivo.id} value={dispositivo.id}>
+                      {dispositivo.label}
                     </option>
                   ))}
                 </Select>
+                {dispositivosError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{dispositivosError}</p>}
+                {!dispositivosError && dispositivosOptions.length === 0 && !dispositivosLoading && (
+                  <p className="mt-2 text-sm text-dark/60">No hay dispositivos disponibles. Registra uno antes de continuar.</p>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Acciones */}
-        <div className="mt-6 flex gap-3">
-          <Button color={'primary'} type="submit" className="px-6">
-            Guardar
+        <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center">
+          <Button color="primary" type="submit" className="px-6" disabled={isSubmitting || dispositivosOptions.length === 0}>
+            {isSubmitting ? 'Guardando...' : 'Guardar'}
           </Button>
-          <Button color={'gray'} type="button" onClick={handleCancelar} className="px-6">
+          <Button color="gray" type="button" onClick={handleCancelar} className="px-6" disabled={isSubmitting}>
             Cancelar
           </Button>
         </div>
+        {submitError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{submitError}</p>}
+        {submitSuccess && <p className="mt-3 text-sm text-green-600 dark:text-green-400">{submitSuccess}</p>}
       </div>
     </form>
   );
 };
 
 export default VehiculoForm;
-

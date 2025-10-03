@@ -32,8 +32,8 @@ const STORAGE_KEYS = {
 };
 
 const ROLE_NAME: Record<number, AuthState['roleName']> = {
-  1: 'administrador',
-  2: 'conductor',
+  2: 'administrador',
+  104: 'conductor',
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -68,9 +68,9 @@ const extractTokenFromLocation = (location: Location): string | null => {
 
 const getLandingPath = (roleId: number | null): string => {
   switch (roleId) {
-    case 1:
-      return '/menu/programar-salida';
     case 2:
+      return '/menu/programar-salida';
+    case 104:
       return '/menu/entregas';
     default:
       return '/inicio';
