@@ -4,17 +4,35 @@ import { Icon } from '@iconify/react/dist/iconify.js';
 import { useNavigate } from 'react-router';
 import { useAuthorizedApi } from 'src/hooks/useAuthorizedApi';
 
+type VehiculoApi = {
+  idVehiculo?: number | string | null;
+  marca?: string | null;
+  modelo?: string | null;
+  placa?: string | null;
+};
+
+type ConductorApi = {
+  idUsuario?: number | string | null;
+  nombreCompleto?: string | null;
+};
+
 type ProgramacionApi = {
   idProgramacion: number | string;
   fechaEntrega?: string | null;
-  estadoEntrega?: number | null;
-  status?: number | null;
+  estadoEntrega?: number | string | null;
+  status?: number | string | null;
+  vehiculo?: VehiculoApi | null;
+  vehiculoAsignado?: VehiculoApi | null;
+  conductor?: ConductorApi | null;
+  conductorAsignado?: ConductorApi | null;
 };
 
 type ProgramacionItem = {
   id: string;
   fechaEntrega: string | null;
   estadoEntrega: number | null;
+  vehiculoDescripcion: string;
+  conductorNombre: string;
 };
 
 const formatDateDisplay = (value: string | null): string => {
@@ -32,31 +50,72 @@ const formatDateForApi = (value: string): string => {
   if (!value) {
     return '';
   }
-  const [year, month, day] = value.split('-');
+  const parts = value.split('-');
+  if (parts.length !== 3) {
+    return '';
+  }
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
   if (!year || !month || !day) {
     return '';
   }
-  return `${day}-${month}-${year}`;
+  return day + '-' + month + '-' + year;
 };
 
-const mapEstadoEntrega = (estado: number | null) => {
+const sanitize = (value?: string | null): string => (value ?? '').trim();
+
+const parseNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && !Number.isNaN(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (!normalized) {
+      return null;
+    }
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+};
+
+const buildVehiculoDescripcion = (vehiculo: VehiculoApi | null | undefined): string => {
+  if (!vehiculo) {
+    return 'Sin vehiculo asignado';
+  }
+  const placa = sanitize(vehiculo.placa);
+  const marca = sanitize(vehiculo.marca);
+  const modelo = sanitize(vehiculo.modelo);
+  const parts = [placa, marca, modelo].filter((part) => Boolean(part));
+  return parts.length ? parts.join(' - ') : 'Sin vehiculo asignado';
+};
+
+const mapProgramacionEstado = (estado: number | null) => {
   switch (estado) {
     case 0:
       return { label: 'En proceso', badge: 'lightwarning', cls: 'border-warning text-warning' };
-    case 1:
-      return { label: 'Entregado', badge: 'lightsuccess', cls: 'border-success text-success' };
     case 2:
-      return { label: 'Atrasado', badge: 'lighterror', cls: 'border-error text-error' };
+      return { label: 'Entregado', badge: 'lightsuccess', cls: 'border-success text-success' };
+    case 3:
+      return { label: 'No entregado', badge: 'lightsecondary', cls: 'border-secondary text-secondary' };
     default:
       return { label: 'Sin estado', badge: 'lightsecondary', cls: 'border-secondary text-secondary' };
   }
 };
 
-const mapProgramacion = (programacion: ProgramacionApi): ProgramacionItem => ({
-  id: String(programacion.idProgramacion),
-  fechaEntrega: programacion.fechaEntrega ?? null,
-  estadoEntrega: programacion.estadoEntrega ?? null,
-});
+const mapProgramacion = (programacion: ProgramacionApi): ProgramacionItem => {
+  const vehiculoRaw = programacion.vehiculo ?? programacion.vehiculoAsignado ?? null;
+  const conductorRaw = programacion.conductor ?? programacion.conductorAsignado ?? null;
+
+  return {
+    id: String(programacion.idProgramacion),
+    fechaEntrega: programacion.fechaEntrega ?? null,
+    estadoEntrega: parseNumber(programacion.estadoEntrega),
+    vehiculoDescripcion: buildVehiculoDescripcion(vehiculoRaw),
+    conductorNombre: sanitize(conductorRaw?.nombreCompleto),
+  };
+};
 
 type SearchParams = {
   nro: string;
@@ -100,13 +159,13 @@ const PanelMonitoreo: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await authorizedFetch(`/api/v1/programacion-distribucion/all?${query.toString()}`, {
+        const response = await authorizedFetch('/api/v1/programacion-distribucion/all?' + query.toString(), {
           signal: controller.signal,
         });
 
         if (!response.ok) {
           const text = await response.text();
-          throw new Error(text || `Error al obtener las programaciones (${response.status}).`);
+          throw new Error(text || 'Error al obtener las programaciones (' + response.status + ').');
         }
 
         const json = (await response.json()) as { data?: ProgramacionApi[] };
@@ -220,7 +279,7 @@ const PanelMonitoreo: React.FC = () => {
                 </TableRow>
               ) : (
                 programaciones.map((programacion) => {
-                  const estado = mapEstadoEntrega(programacion.estadoEntrega);
+                  const estado = mapProgramacionEstado(programacion.estadoEntrega);
                   return (
                     <TableRow key={programacion.id}>
                       <TableCell className="whitespace-nowrap ps-6">
@@ -230,13 +289,21 @@ const PanelMonitoreo: React.FC = () => {
                         <span className="text-sm">{programacion.id}</span>
                       </TableCell>
                       <TableCell>
-                        <Badge color={estado.badge} className={`border ${estado.cls}`}>
+                        <Badge color={estado.badge} className={'border ' + estado.cls}>
                           {estado.label}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <button title="Ver" className="hover:text-primary" onClick={() => navigate(`/menu/panel-monitoreo/salidas/${programacion.id}`)}>
+                          <button
+                            title="Ver"
+                            className="hover:text-primary"
+                            onClick={() =>
+                              navigate('/menu/panel-monitoreo/salidas/' + programacion.id, {
+                                state: { programacion },
+                              })
+                            }
+                          >
                             <Icon icon="solar:eye-linear" width={20} />
                           </button>
                           <button title="Eliminar" className="hover:text-error" disabled>
