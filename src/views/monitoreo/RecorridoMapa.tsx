@@ -80,6 +80,13 @@ const parseCoordinates = (value: string | null): { lat: number; lon: number } | 
 
 const getNotaEstadoInfo = (estado: number | null): EstadoNotaInfo => {
   switch (estado) {
+    case 1:
+      return {
+        label: 'No entregado',
+        pillClass: 'bg-amber-50 text-amber-700 border-amber-200',
+        dotClass: 'bg-amber-500',
+        pinColor: '#facc15',
+      };
     case 2:
       return {
         label: 'Entregado',
@@ -94,19 +101,12 @@ const getNotaEstadoInfo = (estado: number | null): EstadoNotaInfo => {
         dotClass: 'bg-red-500',
         pinColor: '#ef4444',
       };
-    case 1:
-      return {
-        label: 'No entregado',
-        pillClass: 'bg-slate-50 text-slate-600 border-slate-300',
-        dotClass: 'bg-yellow-500',
-        pinColor: '#e8e51e',
-      };
     default:
       return {
         label: 'Sin estado',
-        pillClass: 'bg-slate-50 text-slate-600 border-slate-200',
-        dotClass: 'bg-slate-400',
-        pinColor: '#6b7280',
+        pillClass: 'bg-gray-100 text-gray-600 border-gray-300',
+        dotClass: 'bg-gray-400',
+        pinColor: '#9ca3af',
       };
   }
 };
@@ -306,8 +306,7 @@ const RecorridoMapa = () => {
     <div className="space-y-4">
       <h1 className="text-2xl md:text-3xl font-semibold text-center">Recorrido</h1>
 
-      <div className="mb-4 text-sm text-dark/70">
-      <div className="flex justify-end">
+      <div className="flex justify-end mb-3">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -316,6 +315,8 @@ const RecorridoMapa = () => {
           Volver
         </button>
       </div>
+
+      <div className="mb-4 text-sm text-dark/70">
         <span className="font-medium">Menu</span>
         <span className="mx-2">&gt;</span>
         <span className="font-medium">PanelMonitoreo</span>
@@ -405,4 +406,3 @@ const RecorridoMapa = () => {
 };
 
 export default RecorridoMapa;
-

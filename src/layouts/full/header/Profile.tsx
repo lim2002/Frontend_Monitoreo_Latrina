@@ -13,6 +13,10 @@ const Profile = () => {
     navigate("/auth/login", { replace: true });
   };
 
+  const handleGoToProfile = () => {
+    navigate("/menu/perfil");
+  };
+
   return (
     <div className="relative group/menu">
       <Dropdown
@@ -31,7 +35,10 @@ const Profile = () => {
           </span>
         )}
       >
-        <DropdownItem className="px-3 py-3 flex items-center bg-hover group/link w-full gap-3 text-dark">
+        <DropdownItem
+          className="px-3 py-3 flex items-center bg-hover group/link w-full gap-3 text-dark"
+          onClick={handleGoToProfile}
+        >
           <Icon icon="solar:user-circle-outline" height={20} />
           Perfil
         </DropdownItem>

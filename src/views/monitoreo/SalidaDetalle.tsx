@@ -296,7 +296,7 @@ const SalidaDetalle: React.FC = () => {
                           <button
                             title="Ver detalle"
                             className="hover:text-primary"
-                            onClick={() => navigate('/menu/panel-monitoreo/salidas/' + programacionId + '/detalle/' + notaIdForDetail)}
+                            onClick={() => navigate('/menu/panel-monitoreo/salidas/' + programacionId + '/detalle/' + notaIdForDetail, { state: { nota, programacion, programacionId } })}
                           >
                             <Icon icon="solar:eye-linear" width={20} />
                           </button>
@@ -366,3 +366,4 @@ const SalidaDetalle: React.FC = () => {
 };
 
 export default SalidaDetalle;
+

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Drawer, DrawerItems, Navbar } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import Profile from './Profile';
+import { useCurrentUser } from 'src/context/CurrentUserContext';
 import Notification from './notification';
 import MobileSidebar from '../sidebar/MobileSidebar';
 import { useAuth } from 'src/context/AuthContext';
@@ -9,6 +10,7 @@ import { useAuth } from 'src/context/AuthContext';
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { auth } = useAuth();
+  const { user, isLoading } = useCurrentUser();
 
   const handleClose = () => setIsOpen(false);
 
@@ -16,16 +18,20 @@ const Header = () => {
     if (!auth.isAuthenticated) {
       return 'Bienvenido';
     }
-    const roleLabel = auth.roleName ? auth.roleName.charAt(0).toUpperCase() + auth.roleName.slice(1) : 'Usuario';
-    const idLabel = auth.userId ? ` #${auth.userId}` : '';
-    return `${roleLabel}${idLabel}`;
-  }, [auth]);
+
+    if (isLoading) {
+      return 'Bienvenido...';
+    }
+
+    const trimmedName = (user?.nombreCompleto || user?.username || '').trim();
+    return trimmedName ? `Bienvenido ${trimmedName}` : 'Bienvenido';
+  }, [auth.isAuthenticated, isLoading, user]);
 
   return (
     <>
       <header>
-        <Navbar fluid className={`rounded-lg bg-white shadow-md  py-4 `}>
-          <div className="flex gap-3 items-center justify-between w-full ">
+        <Navbar fluid className="rounded-lg bg-white shadow-md py-4">
+          <div className="flex gap-3 items-center justify-between w-full">
             <div className="flex gap-2 items-center">
               <span
                 onClick={() => setIsOpen(true)}
@@ -44,7 +50,7 @@ const Header = () => {
         </Navbar>
       </header>
 
-      <Drawer open={isOpen} onClose={handleClose} className='w-64'>
+      <Drawer open={isOpen} onClose={handleClose} className="w-64">
         <DrawerItems>
           <MobileSidebar />
         </DrawerItems>

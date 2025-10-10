@@ -1,73 +1,183 @@
-import React, { useState } from 'react';
-import { Table } from 'flowbite-react';
-import { TableBody, TableCell, TableHead, TableHeadCell, TableRow, Badge, Button } from 'flowbite-react';
-import { useNavigate, useParams } from 'react-router';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeadCell, TableRow } from 'flowbite-react';
+import { Icon } from '@iconify/react/dist/iconify.js';
+import { useLocation, useNavigate, useParams } from 'react-router';
+import { useAuthorizedApi } from 'src/hooks/useAuthorizedApi';
 
-type Item = {
+type SalidaProgramadaDetalleApi = {
+  idSalidaProgramadaDetalle?: number | string | null;
+  idSalidaProgramada?: number | string | null;
+  idNotaSalida?: number | string | null;
+  idNotaSalidaDetalle?: number | string | null;
+  productoNombre?: string | null;
+  productoCodigo?: string | null;
+  cantidad?: number | string | null;
+  descripcion?: string | null;
+  precioUnitario?: number | string | null;
+  estadoObservacion?: number | string | null;
+  estadoEntrega?: number | string | null;
+  status?: number | string | null;
+};
+
+type NotaSalidaResumen = {
+  idSalidaProgramada: string;
+  idNotaSalida: string;
+  nroSalida: string;
+  cliente: string;
+  ordenPrioridadRuta: number | null;
+  estadoEntrega: number | null;
+  direccion: string;
+  ubicacionEntrega: string;
+  fechaEntregaConfirmada: string;
+};
+
+type ProgramacionResumen = {
   id: string;
-  codigo: string;
-  producto: string;
+  fechaEntrega: string | null;
+  estadoEntrega: number | null;
+  vehiculoDescripcion: string;
+  conductorNombre: string;
+};
+
+type LocationState = {
+  nota?: NotaSalidaResumen | null;
+  programacion?: ProgramacionResumen | null;
+  programacionId?: string;
+};
+
+type DetalleNota = {
+  id: string;
+  idNotaSalidaDetalle: string;
+  productoCodigo: string;
+  productoNombre: string;
   cantidad: number;
   descripcion: string;
-  estado: 'Entregado' | 'Cancelado';
-  observacion?: string;
+  precioUnitario: number | null;
+  estadoEntrega: number | null;
+  estadoObservacion: number | null;
 };
 
-const dataNota: Record<string, { cliente: string; fecha: string; items: Item[] }> = {
-  n1: {
-    cliente: 'Jorge Ramirez',
-    fecha: '2025-05-24',
-    items: [
-      {
-        id: 'i1',
-        codigo: 'XHDHF',
-        producto: 'Papel higienico Perlita',
-        cantidad: 200,
-        descripcion: 'Paquetes x 4 unidades',
-        estado: 'Entregado',
-        observacion: 'Se entrego completo en porteria 2. Firmo J. Ramirez.',
-      },
-      {
-        id: 'i2',
-        codigo: 'KLMNP',
-        producto: 'Detergente Bolivar',
-        cantidad: 150,
-        descripcion: 'Cajas x 12 unidades (1kg c/u)',
-        estado: 'Cancelado',
-        observacion: 'Cliente solicito reprogramacion por inventario, se cancela parcial.',
-      },
-      { id: 'i3', codigo: 'QWERT', producto: 'Leche en polvo PIL', cantidad: 80, descripcion: 'Bolsas x 1kg', estado: 'Entregado' },
-      { id: 'i4', codigo: 'ZXCVL', producto: 'Cloro Clorox', cantidad: 120, descripcion: 'Bidones x 5 litros', estado: 'Entregado' },
-      {
-        id: 'i5',
-        codigo: 'POIUY',
-        producto: 'Toallas Nova',
-        cantidad: 90,
-        descripcion: 'Paquetes x 10 unidades',
-        estado: 'Cancelado',
-        observacion: 'Producto danado en transito, devuelto al almacen.',
-      },
-      { id: 'i6', codigo: 'MNBVC', producto: 'Jabon en barra Dove', cantidad: 300, descripcion: 'Cajas x 24 unidades', estado: 'Entregado' },
-    ],
-  },
+const sanitize = (value?: string | null): string => (value ?? '').trim();
+
+const parseNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && !Number.isNaN(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (!normalized) {
+      return null;
+    }
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
 };
 
-const fmt = (iso: string) => {
-  const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y}`;
+const mapEstadoEntrega = (estado: number | null) => {
+  switch (estado) {
+    case 1:
+      return { label: 'No entregado', badge: 'lightwarning', cls: 'border-warning text-warning' };
+    case 2:
+      return { label: 'Entregado', badge: 'lightsuccess', cls: 'border-success text-success' };
+    case 3:
+      return { label: 'Atrasado', badge: 'lighterror', cls: 'border-error text-error' };
+    default:
+      return { label: 'Sin estado', badge: 'lightsecondary', cls: 'border-secondary text-secondary' };
+  }
 };
+
+const formatDate = (value: string | null | undefined): string => {
+  if (!value) {
+    return 'Sin registro';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    const [dateOnly] = value.split('T');
+    return (dateOnly ?? value).replace(/-/g, '/');
+  }
+  return new Intl.DateTimeFormat('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+};
+
+const mapDetalle = (detalle: SalidaProgramadaDetalleApi): DetalleNota => ({
+  id: detalle.idSalidaProgramadaDetalle !== undefined && detalle.idSalidaProgramadaDetalle !== null ? String(detalle.idSalidaProgramadaDetalle) : crypto.randomUUID(),
+  idNotaSalidaDetalle: detalle.idNotaSalidaDetalle !== undefined && detalle.idNotaSalidaDetalle !== null ? String(detalle.idNotaSalidaDetalle) : '',
+  productoCodigo: sanitize(detalle.productoCodigo),
+  productoNombre: sanitize(detalle.productoNombre),
+  cantidad: parseNumber(detalle.cantidad) ?? 0,
+  descripcion: sanitize(detalle.descripcion),
+  precioUnitario: parseNumber(detalle.precioUnitario),
+  estadoEntrega: parseNumber(detalle.estadoEntrega),
+  estadoObservacion: parseNumber(detalle.estadoObservacion),
+});
 
 const NotaSalidaDetalle: React.FC = () => {
   const navigate = useNavigate();
-  const { notaId } = useParams();
-  const nota = dataNota[notaId || 'n1'] || dataNota['n1'];
+  const location = useLocation();
+  const { id, notaId } = useParams();
+  const state = (location.state ?? {}) as LocationState;
+  const nota = state.nota ?? null;
+  const programacion = state.programacion ?? null;
+  const { authorizedFetch } = useAuthorizedApi();
 
-  const [openObs, setOpenObs] = useState(false);
-  const [obsText, setObsText] = useState('');
+  const [detalles, setDetalles] = useState<DetalleNota[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [obsDetalleId, setObsDetalleId] = useState<string | null>(null);
+
+  const clienteDisplay = useMemo(() => nota?.cliente || 'Sin cliente', [nota?.cliente]);
+  const fechaDisplay = useMemo(() => formatDate(programacion?.fechaEntrega ?? nota?.fechaEntregaConfirmada ?? null), [nota?.fechaEntregaConfirmada, programacion?.fechaEntrega]);
+
+  useEffect(() => {
+    const salidaProgramadaId = nota?.idSalidaProgramada;
+    if (!salidaProgramadaId) {
+      setDetalles([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsLoading(true);
+    setError(null);
+
+    authorizedFetch(`/api/v1/salidas-programadas-detalle/salida-programada/${encodeURIComponent(salidaProgramadaId)}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Error al obtener el detalle de la salida (${response.status}).`);
+        }
+        const json = (await response.json()) as { data?: SalidaProgramadaDetalleApi[] | null };
+        if (controller.signal.aborted) {
+          return;
+        }
+        const items = Array.isArray(json?.data) ? json.data.map(mapDetalle) : [];
+        setDetalles(items);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        console.error('Error al obtener detalle de nota de salida', err);
+        setError('No se pudo cargar el detalle de la nota de salida.');
+        setDetalles([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [authorizedFetch, nota?.idSalidaProgramada]);
+
+  const handleVerObservacion = (detalleId: string) => {
+    setObsDetalleId(detalleId);
+    // Aquí se podría navegar o abrir modal en el futuro cuando la API de observaciones esté lista.
+  };
 
   return (
     <>
-      {/* Breadcrumb */}
       <div className="mb-4 text-sm text-dark/70">
         <span className="font-medium">Menu</span>
         <span className="mx-2">&gt;</span>
@@ -75,66 +185,73 @@ const NotaSalidaDetalle: React.FC = () => {
         <span className="mx-2">&gt;</span>
         <span className="font-medium">Salidas</span>
         <span className="mx-2">&gt;</span>
-        <span className="text-dark font-semibold">DetalleSalida</span>
+        <span className="text-dark font-semibold">Detalle nota</span>
       </div>
 
       <h3 className="text-2xl font-semibold text-center mb-4">Detalle de Nota de Salida</h3>
 
       <div className="rounded-xl dark:shadow-dark-md shadow-md bg-white dark:bg-darkgray p-6">
-        {/* Cabecera del cliente */}
         <div className="border border-black/20 rounded-lg p-4 bg-white dark:bg-darkgray">
-          <p className="text-sm"><span className="font-semibold">Cliente:</span> {nota.cliente}</p>
-          <p className="text-sm"><span className="font-semibold">Fecha de entrega:</span> {fmt(nota.fecha)}</p>
+          <p className="text-sm"><span className="font-semibold">Cliente:</span> {clienteDisplay}</p>
+          <p className="text-sm"><span className="font-semibold">Fecha de entrega:</span> {fechaDisplay}</p>
+          <p className="text-sm"><span className="font-semibold">Nota:</span> {nota?.nroSalida || notaId || '-'}</p>
         </div>
 
-        {/* Tabla de productos */}
-        <div className="mt-6 overflow-x-auto">
-          <Table hoverable>
-            <TableHead className="border-b border-gray-300">
-              <TableHeadCell className="p-6 text-base">Codigo</TableHeadCell>
-              <TableHeadCell className="text-base">Producto</TableHeadCell>
-              <TableHeadCell className="text-base">Cantidad</TableHeadCell>
-              <TableHeadCell className="text-base">Descripcion</TableHeadCell>
-              <TableHeadCell className="text-base">Estado</TableHeadCell>
-              <TableHeadCell className="text-base">Observacion</TableHeadCell>
-            </TableHead>
-            <TableBody className="divide-y divide-gray-300">
-              {nota.items.map((it) => (
-                <TableRow key={it.id}>
-                  <TableCell className="whitespace-nowrap ps-6">{it.codigo}</TableCell>
-                  <TableCell>{it.producto}</TableCell>
-                  <TableCell>{it.cantidad}</TableCell>
-                  <TableCell>{it.descripcion}</TableCell>
-                  <TableCell>
-                    <Badge
-                      color={it.estado === 'Entregado' ? 'lightsuccess' : 'lighterror'}
-                      className={`border ${it.estado === 'Entregado' ? 'border-success text-success' : 'border-error text-error'}`}
-                    >
-                      {it.estado}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {it.observacion ? (
-                      <Button
-                        color={'lightprimary'}
-                        size="sm"
-                        className="px-3 py-1"
-                        onClick={() => {
-                          setObsText(it.observacion || '');
-                          setOpenObs(true);
-                        }}
-                      >
-                        Ver
-                      </Button>
-                    ) : (
-                      <span className="text-dark/50 text-sm">-</span>
-                    )}
-                  </TableCell>
+        {isLoading && <p className="mt-6 text-sm text-dark/70">Cargando productos...</p>}
+        {error && <p className="mt-6 text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+        {!isLoading && !error && (
+          <div className="mt-6 overflow-x-auto">
+            <Table hoverable>
+              <TableHead className="border-b border-gray-300">
+                <TableRow>
+                  <TableHeadCell className="p-6 text-base">Codigo</TableHeadCell>
+                  <TableHeadCell className="text-base">Producto</TableHeadCell>
+                  <TableHeadCell className="text-base">Cantidad</TableHeadCell>
+                  <TableHeadCell className="text-base">Descripcion</TableHeadCell>
+                  <TableHeadCell className="text-base">Estado entrega</TableHeadCell>
+                  <TableHeadCell className="text-base">Observacion</TableHeadCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHead>
+              <TableBody className="divide-y divide-gray-300">
+                {detalles.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-6 text-sm text-dark/60">
+                      No se registraron productos para esta nota de salida.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  detalles.map((detalle) => {
+                    const estado = mapEstadoEntrega(detalle.estadoEntrega);
+                    const puedeVerObservacion = detalle.estadoObservacion === 1;
+                    return (
+                      <TableRow key={detalle.id}>
+                        <TableCell className="whitespace-nowrap ps-6">{detalle.productoCodigo || '-'}</TableCell>
+                        <TableCell>{detalle.productoNombre || 'Sin nombre'}</TableCell>
+                        <TableCell>{detalle.cantidad}</TableCell>
+                        <TableCell>{detalle.descripcion || 'Sin descripcion'}</TableCell>
+                        <TableCell>
+                          <Badge color={estado.badge} className={`border ${estado.cls}`}>
+                            {estado.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {puedeVerObservacion ? (
+                            <Button color={'light'} size="sm" onClick={() => handleVerObservacion(detalle.id)}>
+                              <Icon icon="solar:notes-linear" width={18} className="me-1" /> Ver observacion
+                            </Button>
+                          ) : (
+                            <span className="text-sm text-dark/50">Sin observacion</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         <div className="mt-6 flex justify-end">
           <Button color={'gray'} onClick={() => navigate(-1)}>
@@ -143,18 +260,19 @@ const NotaSalidaDetalle: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal Observacion (custom overlay sin dependencia) */}
-      {openObs && (
+      {obsDetalleId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-darkgray rounded-xl shadow-lg w-full max-w-xl">
+          <div className="bg-white dark:bg-darkgray rounded-xl shadow-lg w-full max-w-md">
             <div className="px-6 py-4 border-b border-black/10">
-              <h4 className="text-lg font-semibold">OBSERVACION</h4>
+              <h4 className="text-lg font-semibold">Observacion</h4>
             </div>
-            <div className="p-6 max-h-[70vh] overflow-auto">
-              <div className="text-sm leading-6 whitespace-pre-wrap">{obsText}</div>
+            <div className="p-6 text-sm text-dark/70">
+              Observacion disponible para el producto (ID: {obsDetalleId}). Integrar detalle cuando la API este lista.
             </div>
             <div className="px-6 py-4 border-t border-black/10 flex justify-end">
-              <Button color={'primary'} onClick={() => setOpenObs(false)}>OK</Button>
+              <Button color={'primary'} onClick={() => setObsDetalleId(null)}>
+                Cerrar
+              </Button>
             </div>
           </div>
         </div>
