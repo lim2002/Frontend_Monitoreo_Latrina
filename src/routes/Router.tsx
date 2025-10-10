@@ -34,6 +34,7 @@ const Dispositivos = Loadable(lazy(() => import("../views/dispositivos/Dispositi
 // Conductores
 const Conductores = Loadable(lazy(() => import("../views/conductores/Conductores")));
 const Entregas = Loadable(lazy(() => import("../views/conductores/Entregas")));
+const ProgramacionSalidas = Loadable(lazy(() => import("../views/conductores/ProgramacionSalidas")));
 const EntregaDetalle = Loadable(lazy(() => import("../views/conductores/EntregaDetalle")));
 const EntregaObservacion = Loadable(lazy(() => import("../views/conductores/EntregaObservacion")));
 // Programar Salida
@@ -84,6 +85,7 @@ const Router = [
       { path: '/menu/dispositivos', exact: true, element: <Dispositivos /> },
       { path: '/menu/conductores', exact: true, element: <Conductores /> },
       { path: '/menu/entregas', exact: true, element: <Entregas /> },
+      { path: '/menu/entregas/:id/salidas', exact: true, element: <ProgramacionSalidas /> },
       { path: '/menu/entregas/:id', exact: true, element: <EntregaDetalle /> },
       { path: '/menu/entregas/:id/observacion/:productoId', exact: true, element: <EntregaObservacion /> },
       { path: '/menu/programar-salida', exact: true, element: <ProgramarSalida /> },

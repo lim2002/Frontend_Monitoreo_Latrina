@@ -57,6 +57,20 @@ type DetalleNota = {
   estadoObservacion: number | null;
 };
 
+type ObservacionEntregaApi = {
+  idObservacionEntrega?: number | string | null;
+  idSalidasProgramadasDetalle?: number | string | null;
+  observacion?: string | null;
+  estadoEntrega?: number | string | null;
+  status?: number | string | null;
+};
+
+type ObservacionEntrega = {
+  id: string;
+  detalleId: string;
+  observacion: string;
+  estadoEntrega: number | null;
+};
 const sanitize = (value?: string | null): string => (value ?? '').trim();
 
 const parseNumber = (value: unknown): number | null => {
@@ -123,7 +137,8 @@ const NotaSalidaDetalle: React.FC = () => {
   const [detalles, setDetalles] = useState<DetalleNota[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [obsDetalleId, setObsDetalleId] = useState<string | null>(null);
+  const [observaciones, setObservaciones] = useState<Record<string, ObservacionEntrega>>({});
+  const [selectedObservacion, setSelectedObservacion] = useState<ObservacionEntrega | null>(null);
 
   const clienteDisplay = useMemo(() => nota?.cliente || 'Sin cliente', [nota?.cliente]);
   const fechaDisplay = useMemo(() => formatDate(programacion?.fechaEntrega ?? nota?.fechaEntregaConfirmada ?? null), [nota?.fechaEntregaConfirmada, programacion?.fechaEntrega]);
@@ -171,9 +186,65 @@ const NotaSalidaDetalle: React.FC = () => {
     return () => controller.abort();
   }, [authorizedFetch, nota?.idSalidaProgramada]);
 
+  useEffect(() => {
+    const salidaProgramadaId = nota?.idSalidaProgramada;
+    if (!salidaProgramadaId) {
+      setObservaciones({});
+      return;
+    }
+
+    const controller = new AbortController();
+
+    authorizedFetch(
+      `/api/v1/observacion-entregas/programacion-salida/${encodeURIComponent(salidaProgramadaId)}`,
+      { signal: controller.signal },
+    )
+      .then(async (response) => {
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Error al obtener las observaciones (${response.status}).`);
+        }
+        const json = (await response.json()) as { data?: ObservacionEntregaApi[] | null };
+        if (controller.signal.aborted) {
+          return;
+        }
+        const mapped = Array.isArray(json?.data)
+          ? json.data.reduce<Record<string, ObservacionEntrega>>((acc, item) => {
+              const detalleId = item?.idSalidasProgramadasDetalle;
+              if (detalleId === undefined || detalleId === null) {
+                return acc;
+              }
+              const key = String(detalleId);
+              acc[key] = {
+                id:
+                  item?.idObservacionEntrega !== undefined && item?.idObservacionEntrega !== null
+                    ? String(item.idObservacionEntrega)
+                    : key,
+                detalleId: key,
+                observacion: sanitize(item?.observacion),
+                estadoEntrega: parseNumber(item?.estadoEntrega),
+              };
+              return acc;
+            }, {})
+          : {};
+        setObservaciones(mapped);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        console.error('Error al obtener observaciones de entrega', err);
+        setObservaciones({});
+      });
+
+    return () => controller.abort();
+  }, [authorizedFetch, nota?.idSalidaProgramada]);
+
   const handleVerObservacion = (detalleId: string) => {
-    setObsDetalleId(detalleId);
-    // Aquí se podría navegar o abrir modal en el futuro cuando la API de observaciones esté lista.
+    const observacion = observaciones[detalleId];
+    if (observacion) {
+      setSelectedObservacion(observacion);
+    }
   };
 
   return (
@@ -223,7 +294,8 @@ const NotaSalidaDetalle: React.FC = () => {
                 ) : (
                   detalles.map((detalle) => {
                     const estado = mapEstadoEntrega(detalle.estadoEntrega);
-                    const puedeVerObservacion = detalle.estadoObservacion === 1;
+                    const observacionDetalle = observaciones[detalle.id];
+                    const puedeVerObservacion = detalle.estadoObservacion === 1 && Boolean(observacionDetalle);
                     return (
                       <TableRow key={detalle.id}>
                         <TableCell className="whitespace-nowrap ps-6">{detalle.productoCodigo || '-'}</TableCell>
@@ -260,17 +332,17 @@ const NotaSalidaDetalle: React.FC = () => {
         </div>
       </div>
 
-      {obsDetalleId && (
+      {selectedObservacion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white dark:bg-darkgray rounded-xl shadow-lg w-full max-w-md">
             <div className="px-6 py-4 border-b border-black/10">
               <h4 className="text-lg font-semibold">Observacion</h4>
             </div>
             <div className="p-6 text-sm text-dark/70">
-              Observacion disponible para el producto (ID: {obsDetalleId}). Integrar detalle cuando la API este lista.
+              {selectedObservacion.observacion || 'Sin observacion registrada.'}
             </div>
             <div className="px-6 py-4 border-t border-black/10 flex justify-end">
-              <Button color={'primary'} onClick={() => setObsDetalleId(null)}>
+              <Button color={'primary'} onClick={() => setSelectedObservacion(null)}>
                 Cerrar
               </Button>
             </div>
