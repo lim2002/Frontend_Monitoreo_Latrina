@@ -9,10 +9,16 @@ import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import Feature, { type FeatureLike } from 'ol/Feature';
 import Point from 'ol/geom/Point';
+import LineString from 'ol/geom/LineString';
 import { fromLonLat } from 'ol/proj';
 import Style from 'ol/style/Style';
 import Icon from 'ol/style/Icon';
+import Stroke from 'ol/style/Stroke';
 import { boundingExtent } from 'ol/extent';
+import type { Coordinate } from 'ol/coordinate';
+import { useAuthorizedApi } from 'src/hooks/useAuthorizedApi';
+import type { UseAuthorizedApi } from 'src/hooks/useAuthorizedApi';
+import { useTraccarApi } from 'src/hooks/useTraccarApi';
 
 type NotaSalidaResumen = {
   idSalidaProgramada: string;
@@ -31,6 +37,7 @@ type ProgramacionResumen = {
   estadoEntrega: number | null;
   vehiculoDescripcion: string;
   conductorNombre: string;
+  dispositivoId?: string | null;
 };
 
 type RecorridoLocationState = {
@@ -57,9 +64,30 @@ type EstadoNotaInfo = {
   pinColor: string;
 };
 
-const VEHICLE_LON_LAT: [number, number] = [-68.1193, -16.4897];
+const DEFAULT_CENTER: [number, number] = [-68.1193, -16.4897];
+
+type RoutePoint = {
+  lat: number;
+  lon: number;
+  timestamp: number;
+};
 
 const sanitize = (value?: string | null): string => (value ?? '').trim();
+
+const normalizeIsoDateString = (value?: string | null): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+  return trimmed;
+};
 
 const parseCoordinates = (value: string | null): { lat: number; lon: number } | null => {
   const trimmed = sanitize(value);
@@ -112,12 +140,17 @@ const getNotaEstadoInfo = (estado: number | null): EstadoNotaInfo => {
 };
 
 const formatDateDisplay = (value: string | null): string => {
-  if (!value) {
+  const normalized = normalizeIsoDateString(value);
+  if (!normalized) {
     return 'Sin fecha';
   }
-  const date = new Date(value);
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`;
+  }
+  const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return normalized;
   }
   return new Intl.DateTimeFormat('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 };
@@ -127,6 +160,128 @@ const buildPinSvg = (color: string) =>
     `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 32' width='24' height='32'><path fill='${color}' d='M12 0C6 0 1.5 4.5 1.5 10.5c0 6.5 7.6 15.2 9.8 17.6.4.5 1 .5 1.4 0 2.2-2.4 9.8-11.1 9.8-17.6C22.5 4.5 18 0 12 0z'/><circle cx='12' cy='10.5' r='4' fill='white'/></svg>`
   );
 
+const toTraccarRecordArray = (payload: unknown): Array<Record<string, any>> => {
+  if (Array.isArray(payload)) {
+    return payload as Array<Record<string, any>>;
+  }
+  if (payload && typeof payload === 'object') {
+    const candidate = payload as Record<string, any>;
+    const candidates = ['positions', 'data', 'route'];
+    for (const key of candidates) {
+      if (Array.isArray(candidate[key])) {
+        return candidate[key] as Array<Record<string, any>>;
+      }
+    }
+  }
+  return [];
+};
+
+const extractTraccarTimestamp = (entry: Record<string, any>): number | null => {
+  const candidates = [entry.deviceTime, entry.fixTime, entry.serverTime, entry.time];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate) {
+      const timestamp = new Date(candidate).getTime();
+      if (!Number.isNaN(timestamp)) {
+        return timestamp;
+      }
+    }
+  }
+  if (typeof entry.timestamp === 'number' && !Number.isNaN(entry.timestamp)) {
+    return entry.timestamp;
+  }
+  return null;
+};
+
+const extractTraccarCoordinates = (entry: Record<string, any>): { lat: number; lon: number } | null => {
+  const latitude = Number(entry.latitude ?? entry.lat);
+  const longitude = Number(entry.longitude ?? entry.lon);
+  if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+    return null;
+  }
+  return { lat: latitude, lon: longitude };
+};
+
+const normalizeTraccarRecords = (records: Array<Record<string, any>>): RoutePoint[] => {
+  const points: RoutePoint[] = [];
+  for (const record of records) {
+    const coords = extractTraccarCoordinates(record);
+    if (!coords) {
+      continue;
+    }
+    const timestamp = extractTraccarTimestamp(record);
+    if (timestamp === null) {
+      continue;
+    }
+    points.push({ ...coords, timestamp });
+  }
+  points.sort((a, b) => a.timestamp - b.timestamp);
+  const deduped: RoutePoint[] = [];
+  const seen = new Set<number>();
+  for (const point of points) {
+    if (seen.has(point.timestamp)) {
+      continue;
+    }
+    seen.add(point.timestamp);
+    deduped.push(point);
+  }
+  return deduped;
+};
+
+const mergeRoutePoints = (existing: RoutePoint[], additions: RoutePoint[]): RoutePoint[] => {
+  if (additions.length === 0) {
+    return existing;
+  }
+  const combined = [...existing, ...additions];
+  combined.sort((a, b) => a.timestamp - b.timestamp);
+  const deduped: RoutePoint[] = [];
+  const seen = new Set<number>();
+  for (const point of combined) {
+    if (seen.has(point.timestamp)) {
+      continue;
+    }
+    seen.add(point.timestamp);
+    deduped.push(point);
+  }
+  return deduped;
+};
+
+const parseFechaEntregaRange = (
+  fecha: string | null,
+): { from: string; to: string; shouldPoll: boolean } | null => {
+  const normalized = normalizeIsoDateString(fecha);
+  if (!normalized) {
+    return null;
+  }
+  const parts = normalized.split('-');
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [yearStr, monthStr, dayStr] = parts;
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  if (
+    Number.isNaN(year) ||
+    Number.isNaN(month) ||
+    Number.isNaN(day)
+  ) {
+    return null;
+  }
+
+  const from = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const now = new Date();
+  const isSameDay =
+    year === now.getFullYear() &&
+    month === now.getMonth() + 1 &&
+    day === now.getDate();
+
+  const to = isSameDay
+    ? now
+    : new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+
+  return { from: from.toISOString(), to: to.toISOString(), shouldPoll: isSameDay };
+};
+
 const buildTruckSvg = () =>
   encodeURIComponent(
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 36' width='64' height='36'><rect x='2' y='8' width='36' height='16' rx='2' fill='%232563eb'/><rect x='38' y='12' width='16' height='12' rx='2' fill='%232563eb'/><rect x='40' y='14' width='6' height='6' fill='white'/><circle cx='16' cy='28' r='5' fill='%23333'/><circle cx='46' cy='28' r='5' fill='%23333'/></svg>"
@@ -135,6 +290,16 @@ const buildTruckSvg = () =>
 const RecorridoMapa = () => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  let authorizedApi: UseAuthorizedApi | null = null;
+  try {
+    authorizedApi = useAuthorizedApi();
+  } catch (error) {
+    console.error('useAuthorizedApi() fallo al inicializar en RecorridoMapa', error);
+  }
+
+  const authorizedFetch = authorizedApi?.authorizedFetch ?? null;
+  const { traccarFetch } = useTraccarApi();
 
   const { programacion, notas } = useMemo(() => {
     const state = (location.state ?? {}) as RecorridoLocationState;
@@ -170,10 +335,18 @@ const RecorridoMapa = () => {
     () => entregas.filter((entrega): entrega is EntregaItem & { lat: number; lon: number } => entrega.lat !== null && entrega.lon !== null),
     [entregas]
   );
+  const fechaRange = useMemo(() => parseFechaEntregaRange(programacion?.fechaEntrega ?? null), [programacion?.fechaEntrega]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [vehiclePosition, setVehiclePosition] = useState<{ lat: number; lon: number } | null>(null);
+  const [vehicleRoute, setVehicleRoute] = useState<RoutePoint[]>([]);
+  const [vehicleError, setVehicleError] = useState<string | null>(null);
+  const [isLoadingVehicle, setIsLoadingVehicle] = useState(false);
+  const [traccarDeviceId, setTraccarDeviceId] = useState<number | null>(null);
+  const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('[recorrido] entregas actualizadas:', entregas.length);
     if (entregas.length === 0) {
       setSelectedId(null);
       return;
@@ -181,12 +354,102 @@ const RecorridoMapa = () => {
     setSelectedId((prev) => (prev && entregas.some((entrega) => entrega.id === prev) ? prev : entregas[0].id));
   }, [entregas]);
 
+  useEffect(() => {
+    console.log('[recorrido] preparando dispositivo Traccar con programacion:', programacion);
+    setVehiclePosition(null);
+    setVehicleRoute([]);
+    setVehicleError(null);
+    setTraccarDeviceId(null);
+    setDeviceLabel(null);
+
+    if (!authorizedFetch) {
+      console.warn('[recorrido] No se pudo inicializar authorizedFetch');
+      setVehicleError('No se pudo acceder al API autorizado.');
+      return;
+    }
+
+    const dispositivoRaw = programacion?.dispositivoId;
+    console.log('[recorrido] dispositivoRaw recibido:', dispositivoRaw);
+    if (dispositivoRaw === undefined || dispositivoRaw === null) {
+      setVehicleError('No se asigno un dispositivo GPS al vehiculo.');
+      return;
+    }
+
+    const dispositivoId = String(dispositivoRaw).trim();
+    console.log('[recorrido] dispositivoId normalizado:', dispositivoId);
+    if (!dispositivoId) {
+      setVehicleError('No se asigno un dispositivo GPS al vehiculo.');
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const fetchDeviceInfo = async () => {
+      setIsLoadingVehicle(true);
+      try {
+        console.log('[recorrido] solicitando dispositivo GPS a backend propio:', dispositivoId);
+        const response = await authorizedFetch(
+          `/api/v1/dispositivosGps/id/${encodeURIComponent(dispositivoId)}`,
+          { signal: controller.signal },
+        );
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Error al obtener el dispositivo GPS (${response.status}).`);
+        }
+        const json = (await response.json()) as { data?: { codigo?: string | null; modelo?: string | null } | null };
+        if (controller.signal.aborted) {
+          return;
+        }
+        const codigoRaw = sanitize(json?.data?.codigo);
+        const modeloDescripcion = sanitize(json?.data?.modelo);
+        console.log('[recorrido] payload dispositivo GPS:', json?.data, 'codigoRaw:', codigoRaw, 'modelo:', modeloDescripcion);
+        if (!codigoRaw) {
+          setVehicleError('El dispositivo GPS no tiene un identificador valido.');
+          return;
+        }
+        const traccarId = Number.parseInt(codigoRaw, 10);
+        if (Number.isNaN(traccarId)) {
+          setVehicleError('El dispositivo GPS no tiene un identificador numerico valido.');
+          return;
+        }
+        const originalCodigo = modeloDescripcion ? sanitize((modeloDescripcion.split(',')[0] ?? '').trim()) : '';
+        const idLabel = String(traccarId);
+        const displayLabel =
+          modeloDescripcion ||
+          (originalCodigo && originalCodigo !== idLabel ? `${originalCodigo} (ID ${idLabel})` : `ID ${idLabel}`);
+        console.log('[recorrido] traccarId resuelto:', traccarId, 'label:', displayLabel);
+        setDeviceLabel(displayLabel);
+        setTraccarDeviceId(traccarId);
+        lastPositionTimestampRef.current = 0;
+        setVehicleError(null);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        console.error('Error al preparar dispositivo GPS', error);
+        setTraccarDeviceId(null);
+        setVehicleError(error instanceof Error ? error.message : 'No se pudo obtener el dispositivo GPS.');
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingVehicle(false);
+        }
+      }
+    };
+
+    void fetchDeviceInfo();
+
+    return () => controller.abort();
+  }, [authorizedFetch, programacion?.dispositivoId]);
+
   const mapEl = useRef<HTMLDivElement | null>(null);
   const vectorLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const vectorSourceRef = useRef<VectorSource | null>(null);
   const mapRef = useRef<Map | null>(null);
   const viewRef = useRef<View | null>(null);
   const selectedIdRef = useRef<string | null>(null);
+  const vehiculoFeatureRef = useRef<Feature<Point> | null>(null);
+  const previousVehiclePositionRef = useRef<{ lat: number; lon: number } | null>(null);
+  const lastPositionTimestampRef = useRef<number>(0);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -194,11 +457,159 @@ const RecorridoMapa = () => {
   }, [selectedId]);
 
   useEffect(() => {
+    setVehicleRoute([]);
+    setVehiclePosition(null);
+    lastPositionTimestampRef.current = 0;
+    setVehicleError(null);
+
+    if (!traccarDeviceId || !fechaRange) {
+      console.warn('[recorrido] No se puede solicitar recorrido:', { traccarDeviceId, fechaRange });
+      return;
+    }
+
+    console.log('[recorrido] Inicializando carga de posiciones', { traccarDeviceId, fechaRange });
+
+    let cancelled = false;
+    let pollingInterval: number | null = null;
+
+    const clearPolling = () => {
+      if (pollingInterval !== null) {
+        window.clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+    };
+
+    const applyRoutePoints = (points: RoutePoint[]) => {
+      setVehicleRoute(points);
+      if (points.length === 0) {
+        console.warn('[recorrido] Traccar devolvió 0 puntos para el device', traccarDeviceId);
+        setVehiclePosition(null);
+        lastPositionTimestampRef.current = 0;
+        setVehicleError(
+          fechaRange.shouldPoll
+            ? 'Aun no hay recorrido registrado para hoy.'
+            : 'No hay recorrido registrado para esta fecha.',
+        );
+        return;
+      }
+      const lastPoint = points[points.length - 1];
+      console.log('[recorrido] puntos aplicados:', points.length, 'ultimo timestamp', lastPoint.timestamp);
+      setVehiclePosition({ lat: lastPoint.lat, lon: lastPoint.lon });
+      lastPositionTimestampRef.current = lastPoint.timestamp;
+      setVehicleError(null);
+    };
+
+    const fetchRoute = async () => {
+      try {
+        const params = new URLSearchParams({
+          deviceId: String(traccarDeviceId),
+          from: fechaRange.from,
+          to: fechaRange.shouldPoll ? new Date().toISOString() : fechaRange.to,
+        });
+        console.log('[TRACCAR] GET /api/positions params', params.toString());
+
+        const response = await traccarFetch(`/api/positions?${params.toString()}`, {
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Error al obtener posiciones (${response.status}).`);
+        }
+        const payload = await response.json();
+        if (cancelled) {
+          return;
+        }
+        console.log(
+          '[TRACCAR] positions payload length:',
+          Array.isArray(payload) ? payload.length : 'n/a',
+        );
+        const records = normalizeTraccarRecords(toTraccarRecordArray(payload));
+        console.log('[TRACCAR] normalized points:', records.length);
+        applyRoutePoints(records);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.error('Error al obtener posiciones de Traccar', error);
+        setVehicleError(error instanceof Error ? error.message : 'No se pudo obtener el recorrido del vehiculo.');
+      }
+    };
+
+    const pollLatestPosition = async () => {
+      try {
+        const params = new URLSearchParams({
+          deviceId: String(traccarDeviceId),
+        });
+        console.log('[TRACCAR] polling params', params.toString(), 'last ts', lastPositionTimestampRef.current);
+        const response = await traccarFetch(`/api/positions?${params.toString()}`, {
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Error al obtener la posicion actual (${response.status}).`);
+        }
+        const payload = await response.json();
+        if (cancelled) {
+          return;
+        }
+        const records = normalizeTraccarRecords(toTraccarRecordArray(payload));
+        const additions = records.filter((point) => point.timestamp > lastPositionTimestampRef.current);
+        if (additions.length === 0) {
+          console.log('[TRACCAR] Sin nuevas posiciones para device', traccarDeviceId);
+          return;
+        }
+        setVehicleRoute((prev) => mergeRoutePoints(prev, additions));
+        const lastPoint = additions[additions.length - 1];
+        setVehiclePosition({ lat: lastPoint.lat, lon: lastPoint.lon });
+        lastPositionTimestampRef.current = Math.max(lastPositionTimestampRef.current, lastPoint.timestamp);
+        setVehicleError(null);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.error('Error al actualizar posicion en tiempo real de Traccar', error);
+      }
+    };
+
+    const initialize = async () => {
+      await fetchRoute();
+      if (cancelled || !fechaRange.shouldPoll) {
+        return;
+      }
+      await pollLatestPosition();
+      if (cancelled) {
+        return;
+      }
+      pollingInterval = window.setInterval(() => {
+        void pollLatestPosition();
+      }, 3000);
+    };
+
+    void initialize();
+
+    return () => {
+      cancelled = true;
+      clearPolling();
+    };
+  }, [fechaRange, traccarDeviceId, traccarFetch]);
+
+  useEffect(() => {
     if (!mapEl.current) {
       return;
     }
 
-    const center = fromLonLat([VEHICLE_LON_LAT[0], VEHICLE_LON_LAT[1]]);
+    const initialLonLat = (() => {
+      if (vehiclePosition) {
+        return [vehiclePosition.lon, vehiclePosition.lat] as [number, number];
+      }
+      if (entregasConCoordenadas.length > 0) {
+        const first = entregasConCoordenadas[0];
+        return [first.lon, first.lat] as [number, number];
+      }
+      return DEFAULT_CENTER;
+    })();
+
+    const center = fromLonLat(initialLonLat);
     const truckIconUrl = `data:image/svg+xml;charset=UTF-8,${buildTruckSvg()}`;
 
     let currentZoom = 13;
@@ -211,6 +622,12 @@ const RecorridoMapa = () => {
         return new Style({ image: new Icon({ src: truckIconUrl, anchor: [0.5, 1], scale: 0.6 * zoomFactor }) });
       }
 
+      if (tipo === 'recorrido') {
+        return new Style({
+          stroke: new Stroke({ color: '#2563eb', width: 3, lineCap: 'round', lineJoin: 'round' }),
+        });
+      }
+
       const estado = (feature as any).get('estado') as number | null;
       const estadoInfo = getNotaEstadoInfo(estado);
       const isSelected = feature.getId() === selectedIdRef.current;
@@ -220,6 +637,7 @@ const RecorridoMapa = () => {
 
     const vehiculo = new Feature({ geometry: new Point(center), tipo: 'vehiculo' });
     vehiculo.setId('vehiculo');
+    vehiculoFeatureRef.current = vehiculo;
 
     const vectorSource = new VectorSource({ features: [vehiculo] });
     vectorSourceRef.current = vectorSource;
@@ -243,7 +661,75 @@ const RecorridoMapa = () => {
     return () => {
       map.setTarget(undefined);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const feature = vehiculoFeatureRef.current;
+    if (!feature) {
+      return;
+    }
+    const geometry = feature.getGeometry() as Point | null;
+    if (!geometry) {
+      return;
+    }
+    const targetLonLat = (() => {
+      if (vehiclePosition) {
+        return [vehiclePosition.lon, vehiclePosition.lat] as [number, number];
+      }
+      if (entregasConCoordenadas.length > 0) {
+        const first = entregasConCoordenadas[0];
+        return [first.lon, first.lat] as [number, number];
+      }
+      return DEFAULT_CENTER;
+    })();
+
+    geometry.setCoordinates(fromLonLat(targetLonLat));
+
+    if (vehiclePosition) {
+      const prev = previousVehiclePositionRef.current;
+      const changed =
+        !prev ||
+        prev.lat !== vehiclePosition.lat ||
+        prev.lon !== vehiclePosition.lon;
+      if (changed) {
+        previousVehiclePositionRef.current = vehiclePosition;
+        if (entregasConCoordenadas.length === 0) {
+          const view = viewRef.current;
+          if (view) {
+            view.animate({ center: fromLonLat(targetLonLat), duration: 400 });
+          }
+        }
+      }
+    } else {
+      previousVehiclePositionRef.current = null;
+    }
+
+    vectorLayerRef.current?.changed();
+  }, [vehiclePosition, entregasConCoordenadas]);
+
+  useEffect(() => {
+    const source = vectorSourceRef.current;
+    if (!source) {
+      return;
+    }
+
+    const existing = source.getFeatureById('vehiculo-recorrido');
+    if (existing) {
+      source.removeFeature(existing);
+    }
+
+    if (vehicleRoute.length < 2) {
+      vectorLayerRef.current?.changed();
+      return;
+    }
+
+    const line = new LineString(vehicleRoute.map((point) => fromLonLat([point.lon, point.lat])));
+    const feature = new Feature({ geometry: line, tipo: 'recorrido' });
+    feature.setId('vehiculo-recorrido');
+    source.addFeature(feature);
+    vectorLayerRef.current?.changed();
+  }, [vehicleRoute]);
 
   useEffect(() => {
     const source = vectorSourceRef.current;
@@ -267,9 +753,23 @@ const RecorridoMapa = () => {
       source.addFeature(feature);
     });
 
+    const coords: Coordinate[] = [];
+
     if (entregasConCoordenadas.length > 0) {
-      const coords = entregasConCoordenadas.map((entrega) => fromLonLat([entrega.lon as number, entrega.lat as number]));
-      coords.push(fromLonLat([VEHICLE_LON_LAT[0], VEHICLE_LON_LAT[1]]));
+      coords.push(
+        ...entregasConCoordenadas.map((entrega) => fromLonLat([entrega.lon as number, entrega.lat as number])),
+      );
+    }
+
+    if (vehicleRoute.length > 0) {
+      coords.push(...vehicleRoute.map((point) => fromLonLat([point.lon, point.lat])));
+    }
+
+    if (vehiclePosition) {
+      coords.push(fromLonLat([vehiclePosition.lon, vehiclePosition.lat]));
+    }
+
+    if (coords.length > 0) {
       const extent = boundingExtent(coords);
       const view = viewRef.current;
       if (view) {
@@ -278,7 +778,7 @@ const RecorridoMapa = () => {
     }
 
     vectorLayerRef.current?.changed();
-  }, [entregasConCoordenadas]);
+  }, [entregasConCoordenadas, vehiclePosition, vehicleRoute]);
 
   useEffect(() => {
     const handleResize = () => mapRef.current?.updateSize();
@@ -327,7 +827,7 @@ const RecorridoMapa = () => {
       </div>
 
       <div className="rounded-xl bg-white dark:bg-darkgray shadow-md p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
           <div>
             <span className="block text-xs uppercase text-dark/60">Programacion</span>
             <span className="font-semibold">{programacion?.id || 'Sin identificador'}</span>
@@ -344,8 +844,16 @@ const RecorridoMapa = () => {
             <span className="block text-xs uppercase text-dark/60">Vehiculo</span>
             <span className="font-semibold">{programacion?.vehiculoDescripcion || 'Sin vehiculo asignado'}</span>
           </div>
+          <div>
+            <span className="block text-xs uppercase text-dark/60">Dispositivo GPS</span>
+            <span className="font-semibold">{deviceLabel || 'Sin registro'}</span>
+          </div>
         </div>
       </div>
+
+      {!isLoadingVehicle && vehicleError && (
+        <p className="text-sm text-red-600 dark:text-red-400">{vehicleError}</p>
+      )}
 
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 md:col-span-4 lg:col-span-3 bg-white dark:bg-darkgray rounded-md shadow p-3 space-y-2 max-h-60 overflow-auto md:max-h-[70vh]">
@@ -391,8 +899,13 @@ const RecorridoMapa = () => {
           )}
         </div>
 
-        <div className="col-span-12 md:col-span-8 lg:col-span-9 rounded-lg overflow-hidden shadow-md h-[55vh] md:h-[70vh]">
+        <div className="col-span-12 md:col-span-8 lg:col-span-9 rounded-lg overflow-hidden shadow-md h-[55vh] md:h-[70vh] relative">
           <div ref={mapEl} className="w-full h-full" />
+          {(isLoadingVehicle || vehicleError) && (
+            <div className="absolute bottom-3 left-3 rounded-md bg-white/90 dark:bg-darkgray/90 px-3 py-2 text-xs text-dark dark:text-gray-100 shadow">
+              {isLoadingVehicle ? 'Cargando ubicacion del vehiculo...' : vehicleError}
+            </div>
+          )}
         </div>
       </div>
 
@@ -406,3 +919,4 @@ const RecorridoMapa = () => {
 };
 
 export default RecorridoMapa;
+

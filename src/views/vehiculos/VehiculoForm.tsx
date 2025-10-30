@@ -21,9 +21,27 @@ type DispositivoOption = {
 const sanitize = (value?: string | null): string => (value ?? '').trim();
 
 const buildDispositivoLabel = (item: DispositivoApi): string => {
-  const codigo = sanitize(item.codigo) || 'Sin codigo';
-  const modelo = sanitize(item.modelo) || 'Sin modelo';
-  return `${codigo} - ${modelo}`;
+  const traccarId = sanitize(item.codigo);
+  const modeloBruto = sanitize(item.modelo);
+  const [codigoUsuarioRaw, modeloUsuarioRaw] = modeloBruto ? modeloBruto.split(',') : [];
+  const codigoUsuario = sanitize(codigoUsuarioRaw);
+  const modeloUsuario = sanitize(modeloUsuarioRaw);
+
+  const partes: string[] = [];
+  if (codigoUsuario) {
+    partes.push(codigoUsuario);
+  } else if (modeloBruto) {
+    partes.push(modeloBruto);
+  }
+  if (modeloUsuario && modeloUsuario !== codigoUsuario) {
+    partes.push(modeloUsuario);
+  }
+  if (traccarId) {
+    partes.push(`ID ${traccarId}`);
+  }
+
+  const label = partes.filter(Boolean).join(' - ');
+  return label || 'Sin codigo';
 };
 
 const VehiculoForm: React.FC = () => {

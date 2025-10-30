@@ -128,7 +128,7 @@ const mapDetalle = (detalle: SalidaProgramadaDetalleApi): DetalleNota => ({
 const NotaSalidaDetalle: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { id, notaId } = useParams();
+  const { notaId } = useParams();
   const state = (location.state ?? {}) as LocationState;
   const nota = state.nota ?? null;
   const programacion = state.programacion ?? null;

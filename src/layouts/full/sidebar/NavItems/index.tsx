@@ -25,8 +25,14 @@ const NavItems: React.FC<NavItemsProps> = ({ item }) => {
 
   return (
     <>
-      <Link to={item.url} onClick={handleClick} target={item.isPro ? 'blank' : '_self'}>
+      <Link
+        to={item.url}
+        onClick={handleClick}
+        target={item.isPro ? 'blank' : '_self'}
+        className="block"
+      >
         <SidebarItem
+          as="div"
           className={`realtive mb-1 sidebar-link  relative  py-0 ps-6 pe-4  ${
             item.url == pathname
               ? `text-primary  ${

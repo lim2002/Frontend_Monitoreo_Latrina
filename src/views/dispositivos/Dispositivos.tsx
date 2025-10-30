@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeadCell, TableRow, Badge, Button, TextInput } from 'flowbite-react';
 import { Icon } from '@iconify/react/dist/iconify.js';
 import { useAuthorizedApi } from 'src/hooks/useAuthorizedApi';
+import { useTraccarApi } from 'src/hooks/useTraccarApi';
 
 type DispositivoApi = {
   idDispositivo: number | string;
@@ -63,6 +64,7 @@ const statusLabel = (value: number | null): string => {
 
 const Dispositivos: React.FC = () => {
   const { token, authorizedFetch } = useAuthorizedApi();
+  const { traccarFetch } = useTraccarApi();
 
   const [query, setQuery] = useState('');
   const [searchTerm, setSearchTerm] = useState('all');
@@ -173,16 +175,42 @@ const Dispositivos: React.FC = () => {
       return;
     }
 
-    const payload = {
-      idDispositivo: null,
-      codigo,
-      modelo,
-      activo: 1,
-      status: 1,
-    };
-
     setIsSubmitting(true);
+    let traccarDeviceId: number | string | null | undefined;
     try {
+      const traccarDevicePayload = {
+        name: codigo,
+        uniqueId: codigo,
+        category: modelo || undefined,
+      };
+
+      const traccarResponse = await traccarFetch('/api/devices', {
+        method: 'POST',
+        body: JSON.stringify(traccarDevicePayload),
+      });
+
+      if (!traccarResponse.ok) {
+        const text = await traccarResponse.text();
+        throw new Error(text || `Error al registrar el dispositivo en Traccar (${traccarResponse.status}).`);
+      }
+
+      const traccarDevice = (await traccarResponse.json()) as { id?: number | string | null };
+      traccarDeviceId = traccarDevice?.id;
+      if (traccarDeviceId === undefined || traccarDeviceId === null || traccarDeviceId === '') {
+        throw new Error('Traccar no devolvio un identificador para el dispositivo registrado.');
+      }
+
+      const traccarIdAsString = String(traccarDeviceId);
+      const modeloAlmacenado = `${codigo}${modelo ? `, ${modelo}` : ''}`;
+
+      const payload = {
+        idDispositivo: null,
+        codigo: traccarIdAsString,
+        modelo: modeloAlmacenado,
+        activo: 1,
+        status: 1,
+      };
+
       const response = await authorizedFetch('/api/v1/dispositivosGps/add', {
         method: 'POST',
         headers: {
@@ -203,6 +231,15 @@ const Dispositivos: React.FC = () => {
       setReloadKey((prev) => prev + 1);
     } catch (error) {
       console.error('Error al registrar dispositivo', error);
+      if (traccarDeviceId !== undefined && traccarDeviceId !== null) {
+        try {
+          await traccarFetch(`/api/devices/${encodeURIComponent(traccarDeviceId)}`, {
+            method: 'DELETE',
+          });
+        } catch (cleanupError) {
+          console.error('No se pudo revertir el registro en Traccar', cleanupError);
+        }
+      }
       setSubmitError(error instanceof Error ? error.message : 'No se pudo registrar el dispositivo.');
     } finally {
       setIsSubmitting(false);

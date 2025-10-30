@@ -13,8 +13,9 @@ const Dropitems: React.FC<NavItemsProps> = ({ item }) => {
 
   return (
     <>
-    <Link to={item.url} target={item.isPro ? 'blank' : '_self'}>
+    <Link to={item.url} target={item.isPro ? 'blank' : '_self'} className="block">
       <SidebarItem
+        as="div"
         
         className={`realtive max-h-10 relative  py-2 ps-6 pe-4 ${
           item.url == pathname

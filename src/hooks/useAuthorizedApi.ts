@@ -6,7 +6,7 @@ const resolveApiBaseUrl = (): string => {
   if (env) {
     return env.replace(/\/$/, '');
   }
-  //return 'https://prev-photographers-foam-newman.trycloudflare.com';
+  //return 'https://tvs-letter-libraries-cape.trycloudflare.com';
   return 'http://localhost:8080';
 };
 

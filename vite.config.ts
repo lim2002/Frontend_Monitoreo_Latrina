@@ -44,6 +44,14 @@ export default defineConfig({
     // Permite que Vite acepte el Host que llega desde el túnel
     // (si tu subdominio es fijo puedes usar: ['mi-subdominio.trycloudflare.com'])
     allowedHosts: true,
+    proxy: {
+      '/traccar': {
+        target: 'http://127.0.0.1:8082',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/traccar/, ''),
+      },
+    },
     hmr: {
       // Con túnel, el navegador conecta por 443 con WSS
       protocol: 'wss',

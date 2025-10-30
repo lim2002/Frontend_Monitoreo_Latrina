@@ -54,6 +54,7 @@ type ProgramacionResumen = {
   estadoEntrega: number | null;
   vehiculoDescripcion: string;
   conductorNombre: string;
+  dispositivoId?: string | null;
 };
 
 const sanitize = (value?: string | null): string => (value ?? '').trim();
@@ -145,6 +146,7 @@ const extractProgramacionFromState = (state: unknown): ProgramacionResumen | nul
     estadoEntrega: programacion.estadoEntrega ?? null,
     vehiculoDescripcion: programacion.vehiculoDescripcion ?? 'Sin vehiculo asignado',
     conductorNombre: programacion.conductorNombre ?? '',
+    dispositivoId: programacion.dispositivoId ?? null,
   };
 };
 

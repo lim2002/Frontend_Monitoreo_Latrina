@@ -4,16 +4,24 @@ import { Icon } from '@iconify/react/dist/iconify.js';
 import { useNavigate } from 'react-router';
 import { useAuthorizedApi } from 'src/hooks/useAuthorizedApi';
 
+type DispositivoGpsApi = {
+  idDispositivo?: number | string | null;
+  codigo?: string | null;
+};
+
 type VehiculoApi = {
   idVehiculo?: number | string | null;
   marca?: string | null;
   modelo?: string | null;
   placa?: string | null;
+  idDispositivoGps?: number | string | null;
+  dispositivoGps?: DispositivoGpsApi | null;
 };
 
 type ConductorApi = {
   idUsuario?: number | string | null;
   nombreCompleto?: string | null;
+  idDispositivoGps?: number | string | null;
 };
 
 type ProgramacionApi = {
@@ -21,6 +29,8 @@ type ProgramacionApi = {
   fechaEntrega?: string | null;
   estadoEntrega?: number | string | null;
   status?: number | string | null;
+  idDispositivoGps?: number | string | null;
+  dispositivoGps?: DispositivoGpsApi | null;
   vehiculo?: VehiculoApi | null;
   vehiculoAsignado?: VehiculoApi | null;
   conductor?: ConductorApi | null;
@@ -33,15 +43,20 @@ type ProgramacionItem = {
   estadoEntrega: number | null;
   vehiculoDescripcion: string;
   conductorNombre: string;
+  dispositivoId: string | null;
 };
 
 const formatDateDisplay = (value: string | null): string => {
-  if (!value) {
+  const normalized = normalizeIsoDateString(value);
+  if (!normalized) {
     return 'Sin fecha';
   }
-  const date = new Date(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return normalized;
+  }
+  const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return normalized;
   }
   return new Intl.DateTimeFormat('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 };
@@ -64,6 +79,21 @@ const formatDateForApi = (value: string): string => {
 };
 
 const sanitize = (value?: string | null): string => (value ?? '').trim();
+
+const normalizeIsoDateString = (value?: string | null): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+  return trimmed;
+};
 
 const parseNumber = (value: unknown): number | null => {
   if (typeof value === 'number' && !Number.isNaN(value)) {
@@ -91,6 +121,43 @@ const buildVehiculoDescripcion = (vehiculo: VehiculoApi | null | undefined): str
   return parts.length ? parts.join(' - ') : 'Sin vehiculo asignado';
 };
 
+const normalizeIdValue = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number') {
+    return Number.isNaN(value) ? null : String(value);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  return null;
+};
+
+const resolveProgramacionDispositivoId = (
+  programacion: ProgramacionApi,
+  vehiculo: VehiculoApi | null,
+  conductor: ConductorApi | null,
+): string | null => {
+  const candidates: unknown[] = [
+    conductor?.idDispositivoGps,
+    programacion.idDispositivoGps,
+    programacion.dispositivoGps?.idDispositivo,
+    vehiculo?.idDispositivoGps,
+    vehiculo?.dispositivoGps?.idDispositivo,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeIdValue(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+};
+
 const mapProgramacionEstado = (estado: number | null) => {
   switch (estado) {
     case 0:
@@ -107,13 +174,16 @@ const mapProgramacionEstado = (estado: number | null) => {
 const mapProgramacion = (programacion: ProgramacionApi): ProgramacionItem => {
   const vehiculoRaw = programacion.vehiculo ?? programacion.vehiculoAsignado ?? null;
   const conductorRaw = programacion.conductor ?? programacion.conductorAsignado ?? null;
+  const dispositivoId = resolveProgramacionDispositivoId(programacion, vehiculoRaw, conductorRaw);
+  const fechaEntregaNormalizada = normalizeIsoDateString(programacion.fechaEntrega ?? null);
 
   return {
     id: String(programacion.idProgramacion),
-    fechaEntrega: programacion.fechaEntrega ?? null,
+    fechaEntrega: fechaEntregaNormalizada,
     estadoEntrega: parseNumber(programacion.estadoEntrega),
     vehiculoDescripcion: buildVehiculoDescripcion(vehiculoRaw),
     conductorNombre: sanitize(conductorRaw?.nombreCompleto),
+    dispositivoId,
   };
 };
 
@@ -324,3 +394,4 @@ const PanelMonitoreo: React.FC = () => {
 };
 
 export default PanelMonitoreo;
+
